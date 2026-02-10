@@ -58,67 +58,7 @@ func (c *Client) doRequest(method, path string, body any) (*http.Response, error
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 
-	if resp.StatusCode == http.StatusUnauthorized && c.cfg.RefreshToken != "" {
-		resp.Body.Close()
-
-		if err := c.refreshToken(); err != nil {
-			return nil, fmt.Errorf("session expired, please login again")
-		}
-
-		req.Header.Set("Authorization", "Bearer "+c.cfg.AccessToken)
-		resp, err = c.httpClient.Do(req)
-		if err != nil {
-			return nil, fmt.Errorf("request failed after token refresh: %w", err)
-		}
-	}
-
 	return resp, nil
-}
-
-func (c *Client) refreshToken() error {
-	body := RefreshTokenRequest{
-		RefreshToken: c.cfg.RefreshToken,
-	}
-
-	data, err := json.Marshal(body)
-	if err != nil {
-		return err
-	}
-
-	url := c.baseURL + "/api/auth/refresh"
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("refresh failed with status %d", resp.StatusCode)
-	}
-
-	var result APIResponse[AuthResponse]
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return err
-	}
-
-	if !result.Success {
-		return fmt.Errorf("refresh failed: %s", result.Message)
-	}
-
-	c.cfg.AccessToken = result.Data.AccessToken
-	if result.Data.RefreshToken != "" {
-		c.cfg.RefreshToken = result.Data.RefreshToken
-	}
-
-	return c.cfg.Save()
 }
 
 func decodeResponse[T any](resp *http.Response) (*APIResponse[T], error) {

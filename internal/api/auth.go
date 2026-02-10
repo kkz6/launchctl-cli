@@ -4,24 +4,37 @@ import (
 	"net/http"
 )
 
-func (c *Client) Login(email, password string) (*AuthResponse, error) {
-	body := LoginRequest{
-		Email:    email,
-		Password: password,
-		Remember: true,
-	}
+func (c *Client) ValidateToken(token string) (*UserResponse, error) {
+	original := c.cfg.AccessToken
+	c.cfg.AccessToken = token
 
-	resp, err := c.doRequest(http.MethodPost, "/api/auth/login", body)
+	resp, err := c.doRequest(http.MethodGet, "/api/auth/user", nil)
 	if err != nil {
+		c.cfg.AccessToken = original
 		return nil, err
 	}
 
-	result, err := decodeResponse[AuthResponse](resp)
+	result, err := decodeResponse[UserResponse](resp)
 	if err != nil {
+		c.cfg.AccessToken = original
 		return nil, err
 	}
 
 	return &result.Data, nil
+}
+
+func (c *Client) VerifyTwoFactor(code string) error {
+	body := TwoFactorChallengeRequest{
+		Code: code,
+	}
+
+	resp, err := c.doRequest(http.MethodPost, "/api/auth/two-factor/challenge", body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }
 
 func (c *Client) Logout() error {

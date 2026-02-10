@@ -11,20 +11,18 @@ import (
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Authenticate with the API",
+	Short: "Authenticate with an API token",
+	Long:  "Authenticate using a personal access token generated from the web dashboard.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var email, password string
+		var token string
 
 		form := huh.NewForm(
 			huh.NewGroup(
 				huh.NewInput().
-					Title("Email").
-					Placeholder("you@example.com").
-					Value(&email),
-				huh.NewInput().
-					Title("Password").
+					Title("API Token").
+					Placeholder("Paste your token from the dashboard").
 					EchoMode(huh.EchoModePassword).
-					Value(&password),
+					Value(&token),
 			),
 		)
 
@@ -32,24 +30,56 @@ var loginCmd = &cobra.Command{
 			return err
 		}
 
-		client := api.NewClient(cfg)
-
-		auth, err := client.Login(email, password)
-		if err != nil {
-			return fmt.Errorf("login failed: %w", err)
+		if token == "" {
+			return fmt.Errorf("token is required")
 		}
 
-		cfg.AccessToken = auth.AccessToken
-		cfg.RefreshToken = auth.RefreshToken
-		cfg.UserID = auth.User.ID
-		cfg.UserName = auth.User.Name
-		cfg.UserEmail = auth.User.Email
+		client := api.NewClient(cfg)
 
-		if auth.User.CurrentTeam != nil {
-			cfg.TeamID = auth.User.CurrentTeam.ID
-			cfg.TeamName = auth.User.CurrentTeam.Name
-		} else if auth.User.CurrentTeamID != nil {
-			cfg.TeamID = *auth.User.CurrentTeamID
+		user, err := client.ValidateToken(token)
+		if err != nil {
+			return fmt.Errorf("invalid token: %w", err)
+		}
+
+		cfg.AccessToken = token
+
+		if user.TwoFactorEnabled {
+			var code string
+
+			twoFactorForm := huh.NewForm(
+				huh.NewGroup(
+					huh.NewInput().
+						Title("Two-Factor Code").
+						Placeholder("Enter your 6-digit code").
+						Value(&code),
+				),
+			)
+
+			if err := twoFactorForm.Run(); err != nil {
+				cfg.AccessToken = ""
+				return err
+			}
+
+			if code == "" {
+				cfg.AccessToken = ""
+				return fmt.Errorf("two-factor code is required")
+			}
+
+			if err := client.VerifyTwoFactor(code); err != nil {
+				cfg.AccessToken = ""
+				return fmt.Errorf("two-factor verification failed: %w", err)
+			}
+		}
+
+		cfg.UserID = user.ID
+		cfg.UserName = user.Name
+		cfg.UserEmail = user.Email
+
+		if user.CurrentTeam != nil {
+			cfg.TeamID = user.CurrentTeam.ID
+			cfg.TeamName = user.CurrentTeam.Name
+		} else if user.CurrentTeamID != nil {
+			cfg.TeamID = *user.CurrentTeamID
 		}
 
 		if err := cfg.Save(); err != nil {
@@ -59,8 +89,8 @@ var loginCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println(tui.Success.Render("Logged in successfully"))
 		fmt.Println()
-		fmt.Println(tui.Label.Render("User:") + tui.Value.Render(auth.User.Name))
-		fmt.Println(tui.Label.Render("Email:") + tui.Value.Render(auth.User.Email))
+		fmt.Println(tui.Label.Render("User:") + tui.Value.Render(user.Name))
+		fmt.Println(tui.Label.Render("Email:") + tui.Value.Render(user.Email))
 		if cfg.TeamName != "" {
 			fmt.Println(tui.Label.Render("Team:") + tui.Value.Render(cfg.TeamName))
 		}

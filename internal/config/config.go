@@ -13,14 +13,13 @@ const (
 )
 
 type Config struct {
-	APIURL       string `json:"api_url"`
-	AccessToken  string `json:"access_token,omitempty"`
-	RefreshToken string `json:"refresh_token,omitempty"`
-	TeamID       string `json:"team_id,omitempty"`
-	TeamName     string `json:"team_name,omitempty"`
-	UserID       string `json:"user_id,omitempty"`
-	UserName     string `json:"user_name,omitempty"`
-	UserEmail    string `json:"user_email,omitempty"`
+	APIURL      string `json:"api_url"`
+	AccessToken string `json:"access_token,omitempty"`
+	TeamID      string `json:"team_id,omitempty"`
+	TeamName    string `json:"team_name,omitempty"`
+	UserID      string `json:"user_id,omitempty"`
+	UserName    string `json:"user_name,omitempty"`
+	UserEmail   string `json:"user_email,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -89,7 +88,6 @@ func (c *Config) IsAuthenticated() bool {
 
 func (c *Config) ClearAuth() {
 	c.AccessToken = ""
-	c.RefreshToken = ""
 	c.UserID = ""
 	c.UserName = ""
 	c.UserEmail = ""

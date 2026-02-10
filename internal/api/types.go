@@ -17,18 +17,9 @@ type PaginationMeta struct {
 	LastPage    int `json:"last_page"`
 }
 
-type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Remember bool   `json:"remember"`
-}
-
-type AuthResponse struct {
-	User         UserResponse `json:"user"`
-	AccessToken  string       `json:"access_token"`
-	RefreshToken string       `json:"refresh_token,omitempty"`
-	ExpiresIn    int          `json:"expires_in"`
-	TokenType    string       `json:"token_type"`
+type TwoFactorChallengeRequest struct {
+	Code         string `json:"code,omitempty"`
+	RecoveryCode string `json:"recovery_code,omitempty"`
 }
 
 type UserResponse struct {
@@ -244,6 +235,3 @@ type SwitchTeamRequest struct {
 	TeamID string `json:"team_id"`
 }
 
-type RefreshTokenRequest struct {
-	RefreshToken string `json:"refresh_token"`
-}
