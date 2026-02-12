@@ -4,9 +4,112 @@ Complete design document for all planned CLI features, organized by priority tie
 
 ---
 
+## Currently Implemented
+
+| Command | Description |
+|---------|-------------|
+| `launchctl login` | Authenticate with API token + 2FA challenge |
+| `launchctl logout` | Clear credentials |
+| `launchctl version` | Display CLI version |
+| `launchctl status` | Dashboard TUI (servers, recent deployments) |
+| `launchctl config show` | Show current config |
+| `launchctl config set` | Set config values |
+| `launchctl servers list` | List all servers |
+| `launchctl servers show <id>` | Show server details |
+| `launchctl servers create` | Create a server (interactive) |
+| `launchctl servers reboot <id>` | Reboot a server |
+| `launchctl servers ssh <id>` | SSH into a server |
+| `launchctl servers metrics <id>` | Show server metrics |
+| `launchctl sites list --server <id>` | List sites on a server |
+| `launchctl sites show <id>` | Show site details |
+| `launchctl sites create --server <id>` | Create a site (interactive) |
+| `launchctl deploy trigger` | Trigger deployment with live streaming |
+| `launchctl deploy list` | List deployments |
+| `launchctl deploy show <id>` | Show deployment details |
+| `launchctl deploy rollback` | Rollback to a previous deployment |
+| `launchctl teams list` | List teams |
+| `launchctl teams switch` | Switch active team |
+| `launchctl teams members` | List team members |
+
+---
+
 ## Tier 1: Daily Workflow (High Impact)
 
-### 1.1 `launchctl env` — Environment File Management
+### 1.1 `launchctl init` — Project Configuration
+
+Create a `.launchctl.yml` in the repo root to bind the project to a server + site. Eliminates repetitive `--server` and `--site` flags.
+
+**Commands:**
+
+```
+launchctl init                                Interactive setup
+launchctl init --server <id> --site <id>      Non-interactive
+```
+
+**Config File (`.launchctl.yml`):**
+
+```yaml
+server: 01HQGZ7V8K3M5N2P4R6T8W0X
+site: 01HQGZ7V8K3M5N2P4R6T8W0Y
+```
+
+**How It Works:**
+- All commands that accept `--server` and `--site` flags check for `.launchctl.yml` in the current directory (and parent directories, like `.git`)
+- Explicit flags always override the config file
+- `launchctl init` uses `huh` forms to pick server and site interactively
+
+**Commands That Benefit:**
+
+```bash
+# Before (without init)
+launchctl deploy trigger --server abc --site def
+launchctl env pull --server abc --site def
+launchctl logs --server abc --site def --type app
+launchctl run --server abc --site def "node migrate.js"
+
+# After (with .launchctl.yml in repo)
+launchctl deploy trigger
+launchctl env pull
+launchctl logs --type app
+launchctl run "node migrate.js"
+```
+
+**Multi-Environment Support:**
+
+```yaml
+default: production
+
+environments:
+  production:
+    server: 01HQGZ7V8K3M5N2P4R6T8W0X
+    site: 01HQGZ7V8K3M5N2P4R6T8W0Y
+  staging:
+    server: 01HQGZ7V8K3M5N2P4R6T8W0Z
+    site: 01HQGZ7V8K3M5N2P4R6T8W0A
+```
+
+Then: `launchctl deploy trigger --env staging`
+
+**Implementation Notes:**
+- Walk up directories until `.launchctl.yml` or `.git` is found
+- Add to `.gitignore` template (contains server-specific IDs)
+
+**Files to Create:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/init.go` | Init command |
+| `internal/config/project.go` | Project config loader (.launchctl.yml) |
+
+**Files to Modify:**
+
+| File | Change |
+|------|--------|
+| `cmd/root.go` | Load project config, inject defaults into flags |
+
+---
+
+### 1.2 `launchctl env` — Environment File Management
 
 Push and pull `.env` files between local machine and remote servers.
 
@@ -30,7 +133,7 @@ launchctl env diff --server <id> --site <id> -f .env   Diff local vs remote
 
 **Implementation Notes:**
 - The `:file` parameter is encrypted via `EncodeFileRouteParam()` — CLI must first call the list endpoint to get the encoded param for the .env file
-- Available file types depend on site type: Laravel sites have `.env`, WordPress sites have `wp-config.php`
+- Available file types depend on site type and stack
 - Environment file path varies by deploy mode:
   - Zero-downtime: `/sites/shared/.env`
   - Standard: `/sites/repository/.env`
@@ -48,7 +151,6 @@ launchctl env diff --server <id> --site <id> -f .env   Diff local vs remote
 **Safety:**
 - `env push` shows a diff and requires confirmation before overwriting
 - `env push` creates a backup of the remote .env before writing
-- Warn if pushing an .env that's missing critical keys (APP_KEY, DB_PASSWORD, etc.)
 
 **Files to Create:**
 
@@ -63,18 +165,18 @@ launchctl env diff --server <id> --site <id> -f .env   Diff local vs remote
 
 ---
 
-### 1.2 `launchctl logs` — Application Log Tailing
+### 1.3 `launchctl logs` — Log Tailing
 
-Tail server and site logs in real-time.
+Tail server and site logs in real-time with color-coded output.
 
 **Commands:**
 
 ```
 launchctl logs --server <id>                            List available logs
-launchctl logs --server <id> --type laravel             Tail Laravel log
-launchctl logs --server <id> --site <id> --type caddy   Tail site Caddy log
-launchctl logs --server <id> --type php-fpm             Tail PHP-FPM log
-launchctl logs --server <id> --type mysql               Tail MySQL error log
+launchctl logs --server <id> --type app                 Tail application log
+launchctl logs --server <id> --site <id> --type access  Tail access log
+launchctl logs --server <id> --type database            Tail database log
+launchctl logs --server <id> --type webserver            Tail web server log
 ```
 
 **API Endpoints Used:**
@@ -86,8 +188,11 @@ launchctl logs --server <id> --type mysql               Tail MySQL error log
 | `GET` | `/servers/:serverId/sites/:id/logs` | List available site logs |
 
 **Available Log Types (by installed software):**
-- PHP-FPM, Caddy, MySQL, PostgreSQL, Redis, Supervisor
-- Site-specific: Laravel (`storage/logs/laravel.log`), Caddy access/error logs
+- Web server access/error logs
+- Database error logs
+- Process manager logs
+- Cache server logs
+- Site-specific application logs
 
 **Implementation Notes:**
 - Like .env files, the `:log` parameter is encrypted — must first list logs to get the encoded param
@@ -101,7 +206,7 @@ launchctl logs --server <id> --type mysql               Tail MySQL error log
 |------|-------------|
 | `--server`, `-s` | Server ID (required) |
 | `--site` | Site ID (for site-specific logs) |
-| `--type`, `-t` | Log type (laravel, caddy, php-fpm, mysql, etc.) |
+| `--type`, `-t` | Log type (app, access, database, webserver, etc.) |
 | `--lines`, `-n` | Number of lines to show (default: 50) |
 | `--follow`, `-f` | Follow mode — continuously tail (default: true) |
 
@@ -114,16 +219,16 @@ launchctl logs --server <id> --type mysql               Tail MySQL error log
 
 ---
 
-### 1.3 `launchctl run` — One-Off Commands
+### 1.4 `launchctl run` — Execute Commands
 
 Run a command on a server/site without opening a full SSH session.
 
 **Commands:**
 
 ```
-launchctl run --server <id> --site <id> "php artisan migrate --force"
-launchctl run --server <id> --site <id> "php artisan tinker"
-launchctl run --server <id> --site <id> --history     List previous commands
+launchctl run --server <id> --site <id> "node migrate.js"
+launchctl run --server <id> --site <id> --command "npm run build"
+launchctl run --server <id> --site <id> --history           List previous commands
 ```
 
 **API Endpoints Used:**
@@ -137,7 +242,7 @@ launchctl run --server <id> --site <id> --history     List previous commands
 **Request:**
 ```json
 {
-  "command": "php artisan migrate --force"
+  "command": "node migrate.js"
 }
 ```
 
@@ -145,7 +250,7 @@ launchctl run --server <id> --site <id> --history     List previous commands
 ```json
 {
   "id": "abc123",
-  "command": "php artisan migrate --force",
+  "command": "node migrate.js",
   "status": "pending",
   "output": null,
   "exit_code": null
@@ -164,6 +269,7 @@ launchctl run --server <id> --site <id> --history     List previous commands
 |------|-------------|
 | `--server`, `-s` | Server ID (required) |
 | `--site` | Site ID (required) |
+| `--command` | Command string (alternative to positional arg) |
 | `--history` | List previous commands instead of running one |
 
 **Files to Create:**
@@ -175,80 +281,37 @@ launchctl run --server <id> --site <id> --history     List previous commands
 
 ---
 
-### 1.4 `launchctl init` — Project Configuration
+### 1.5 `launchctl deploy logs` — Deployment Logs
 
-Create a `.launchctl.yml` in the repo root to bind the project to a server + site. Eliminates repetitive `--server` and `--site` flags.
+View output logs for the most recent or a specific deployment.
 
 **Commands:**
 
 ```
-launchctl init                    Interactive setup
-launchctl init --server <id> --site <id>   Non-interactive
-```
-
-**Config File (`.launchctl.yml`):**
-
-```yaml
-server: 01HQGZ7V8K3M5N2P4R6T8W0X
-site: 01HQGZ7V8K3M5N2P4R6T8W0Y
-```
-
-**How It Works:**
-- All commands that accept `--server` and `--site` flags check for `.launchctl.yml` in the current directory (and parent directories, like `.git`)
-- Explicit flags always override the config file
-- `launchctl init` uses `huh` forms to pick server and site interactively
-
-**Commands That Benefit:**
-
-```bash
-# Before (without init)
-launchctl deploy trigger --server abc --site def
-launchctl env pull --server abc --site def
-launchctl logs --server abc --site def --type laravel
-launchctl run --server abc --site def "php artisan migrate"
-
-# After (with .launchctl.yml in repo)
-launchctl deploy trigger
-launchctl env pull
-launchctl logs --type laravel
-launchctl run "php artisan migrate"
+launchctl deploy logs --server <id> --site <id>            Latest deployment log
+launchctl deploy logs <deployment-id> --server <id> --site <id>   Specific deployment log
 ```
 
 **Implementation Notes:**
-- Walk up directories until `.launchctl.yml` or `.git` is found
-- Add to `.gitignore` template (contains server-specific IDs)
-- Support multiple environments via profiles:
-
-```yaml
-default: production
-
-environments:
-  production:
-    server: 01HQGZ7V8K3M5N2P4R6T8W0X
-    site: 01HQGZ7V8K3M5N2P4R6T8W0Y
-  staging:
-    server: 01HQGZ7V8K3M5N2P4R6T8W0Z
-    site: 01HQGZ7V8K3M5N2P4R6T8W0A
-```
-
-Then: `launchctl deploy trigger --env staging`
-
-**Files to Create:**
-
-| File | Purpose |
-|------|---------|
-| `cmd/init.go` | Init command |
-| `internal/config/project.go` | Project config loader (.launchctl.yml) |
+- Fetches deployment details and displays the output/log content
+- Useful for reviewing deployments after the fact (vs the live TUI during trigger)
+- With `--follow`, stream logs in real-time for an in-progress deployment
 
 **Files to Modify:**
 
 | File | Change |
 |------|--------|
-| `cmd/root.go` | Load project config, inject defaults into flags |
+| `cmd/deploy/deploy.go` | Add `logs` subcommand |
+
+**Files to Create:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/deploy/logs.go` | Deployment log viewer |
 
 ---
 
-### 1.5 CI/CD Mode
+### 1.6 CI/CD Mode
 
 Non-interactive mode for automation pipelines (GitHub Actions, GitLab CI).
 
@@ -294,7 +357,142 @@ Non-interactive mode for automation pipelines (GitHub Actions, GitLab CI).
 
 ## Tier 2: Server Management (High Value)
 
-### 2.1 `launchctl firewall` — Firewall Rules
+### 2.1 `launchctl ssh test` / `launchctl ssh configure` — SSH Key Setup
+
+Test and configure SSH key authentication for server access.
+
+**Commands:**
+
+```
+launchctl ssh test --server <id>                        Test SSH connectivity
+launchctl ssh configure --server <id>                   Configure SSH key
+launchctl ssh configure --server <id> --key ~/.ssh/id_ed25519.pub --name "My Laptop"
+```
+
+**Implementation Notes:**
+- `ssh test` attempts an SSH connection to the server and reports success/failure
+- `ssh configure` uploads the user's public key to the server via API
+- Auto-detect default SSH key (`~/.ssh/id_ed25519.pub` or `~/.ssh/id_rsa.pub`)
+
+**Files to Modify:**
+
+| File | Change |
+|------|--------|
+| `cmd/servers/ssh.go` | Add `test` and `configure` subcommands or make ssh a top-level command group |
+
+---
+
+### 2.2 `launchctl services` — Service Status, Logs & Restart
+
+Unified interface for managing all installed services on a server. Replaces individual daemon/database/webserver management with one consistent pattern.
+
+**Commands:**
+
+```
+launchctl services list --server <id>                         List all services
+launchctl services status <service> --server <id>             Check service status
+launchctl services logs <service> --server <id>               View service logs
+launchctl services logs <service> --server <id> --follow      Stream logs in realtime
+launchctl services restart <service> --server <id>            Restart a service
+launchctl services stop <service> --server <id>               Stop a service
+launchctl services start <service> --server <id>              Start a service
+```
+
+Where `<service>` is a service name like `caddy`, `mysql`, `postgresql`, `redis`, `supervisor`, or a daemon name.
+
+**API Endpoints:**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/servers/:id/services` | List installed services |
+| `POST` | `/servers/:id/services/:id` | Service operation (start/stop/restart/status) |
+
+**Service Types:** Web server, database, cache, process manager, runtime, custom daemons
+
+**Table Output:**
+
+```
+Services (server: production-web)
+
+  Name          Type        Version   Status    Default
+  Caddy         webserver   2.7       running   -
+  MySQL 8.0     database    8.0       running   -
+  Redis         cache       7.2       running   -
+  Supervisor    process     4.2       running   -
+  Node.js       runtime     20        installed -
+```
+
+**Files to Create:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/services/services.go` | Parent command |
+| `cmd/services/list.go` | List installed services |
+| `cmd/services/status.go` | Service status |
+| `cmd/services/logs.go` | Service logs with --follow |
+| `cmd/services/restart.go` | Restart service |
+| `cmd/services/stop.go` | Stop service |
+| `cmd/services/start.go` | Start service |
+| `internal/api/services.go` | API methods |
+
+---
+
+### 2.3 `launchctl databases` — Database Management
+
+Manage databases, database users, and access database shells.
+
+**Commands:**
+
+```
+launchctl databases list --server <id>                        List databases
+launchctl databases shell --server <id>                       Open database shell (interactive picker)
+launchctl databases shell --server <id> --database <name>     Open specific database shell
+launchctl databases shell --server <id> --user <user>         Specify database user
+launchctl databases proxy --server <id> --database <id>       SSH tunnel for local client access
+```
+
+**API Endpoints:**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/servers/:id/databases` | List databases |
+| `GET` | `/servers/:id/database-users` | List database users |
+| `GET` | `/servers/:id/ssh-credentials` | Get SSH credentials for tunnel |
+| `GET` | `/servers/:id/database-users/:id/credentials` | Get DB user credentials |
+
+**Database Shell:**
+- Detect installed database type (MySQL, PostgreSQL)
+- SSH into server and launch the appropriate client (`mysql`, `psql`)
+- Support specifying database name and user
+
+**Database Proxy (SSH Tunnel):**
+- Establish SSH tunnel: `localhost:<auto-port>` → `server:3306/5432`
+- Display connection string for local clients
+- Keep tunnel alive until user exits
+
+**Table Output:**
+
+```
+Databases (server: production-web)
+
+  Name              Type         Status
+  app_production    mysql        active
+  app_staging       mysql        active
+```
+
+**Files to Create:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/databases/databases.go` | Parent command |
+| `cmd/databases/list.go` | List databases |
+| `cmd/databases/shell.go` | Open database shell |
+| `cmd/databases/proxy.go` | SSH tunnel proxy |
+| `internal/api/databases.go` | API methods |
+
+---
+
+### 2.4 `launchctl firewall` — Firewall Rules
 
 **Commands:**
 
@@ -343,14 +541,14 @@ Firewall Rules (server: production-web)
 
 ---
 
-### 2.2 `launchctl cron` — Cron Job Management
+### 2.5 `launchctl cron` — Cron Job Management
 
 **Commands:**
 
 ```
 launchctl cron list --server <id>
 launchctl cron add --server <id>                         Interactive
-launchctl cron add --server <id> --expression "0 * * * *" --command "php artisan schedule:run"
+launchctl cron add --server <id> --expression "0 * * * *" --command "backup.sh"
 launchctl cron remove <cron-id> --server <id>
 ```
 
@@ -372,10 +570,10 @@ launchctl cron remove <cron-id> --server <id>
 ```
 Cron Jobs (server: production-web)
 
-  User    Expression      Command                           Status
-  root    * * * * *       php artisan schedule:run           installed
-  root    0 2 * * *       /usr/local/bin/backup.sh           installed
-  app     0 */6 * * *     php artisan cache:clear            pending
+  User    Expression      Command                  Status
+  root    * * * * *       run-scheduler            installed
+  root    0 2 * * *       /usr/local/bin/backup    installed
+  app     0 */6 * * *     clear-cache              pending
 ```
 
 **Files to Create:**
@@ -390,7 +588,7 @@ Cron Jobs (server: production-web)
 
 ---
 
-### 2.3 `launchctl ssl` — SSL Certificate Management
+### 2.6 `launchctl ssl` — SSL Certificate Management
 
 **Commands:**
 
@@ -419,15 +617,6 @@ launchctl ssl off --server <id> --site <id>              Disable SSL
 }
 ```
 
-**Table Output:**
-
-```
-SSL Certificates (site: api.example.com)
-
-  Type    Domains              Active   Uploaded
-  auto    api.example.com      yes      2026-01-15
-```
-
 **Files to Create:**
 
 | File | Purpose |
@@ -440,7 +629,7 @@ SSL Certificates (site: api.example.com)
 
 ---
 
-### 2.4 `launchctl ssh-keys` — SSH Key Management
+### 2.7 `launchctl ssh-keys` — SSH Key Management
 
 **Commands:**
 
@@ -483,16 +672,18 @@ launchctl ssh-keys remove <key-id>                       Delete key entirely
 
 ---
 
-### 2.5 `launchctl daemons` — Daemon/Worker Management
+### 2.8 `launchctl daemons` — Background Process Management
 
 **Commands:**
 
 ```
 launchctl daemons list --server <id>
 launchctl daemons add --server <id>                      Interactive
-launchctl daemons add --server <id> --command "php artisan queue:work" --processes 3
+launchctl daemons add --server <id> --command "worker.js" --processes 3
 launchctl daemons restart <id> --server <id>
 launchctl daemons remove <id> --server <id>
+launchctl daemons logs <id> --server <id>                View daemon output
+launchctl daemons status <id> --server <id>              Check if running
 ```
 
 **API Endpoints:**
@@ -514,10 +705,10 @@ launchctl daemons remove <id> --server <id>
 ```
 Daemons (server: production-web)
 
-  User   Command                       Procs   Running   Status
-  app    php artisan queue:work        3       yes       installed
-  app    php artisan horizon           1       yes       installed
-  root   /usr/bin/redis-server         1       yes       installed
+  User   Command                  Procs   Running   Status
+  app    node worker.js           3       yes       installed
+  app    python celery worker     1       yes       installed
+  root   /usr/bin/redis-server    1       yes       installed
 ```
 
 **Files to Create:**
@@ -529,21 +720,21 @@ Daemons (server: production-web)
 | `cmd/daemons/add.go` | Add daemon |
 | `cmd/daemons/restart.go` | Restart daemon |
 | `cmd/daemons/remove.go` | Remove daemon |
+| `cmd/daemons/logs.go` | View daemon logs |
+| `cmd/daemons/status.go` | Check daemon status |
 | `internal/api/daemons.go` | API methods |
 
 ---
 
-### 2.6 `launchctl software` — Server Software Management
+### 2.9 `launchctl software` — Server Software Management
 
 **Commands:**
 
 ```
 launchctl software list --server <id>                    Installed software
 launchctl software available --server <id>               Available to install
-launchctl software install --server <id> php8.3
-launchctl software remove --server <id> php8.1
-launchctl software restart --server <id> mysql
-launchctl software status --server <id> mysql
+launchctl software install --server <id> node20
+launchctl software remove --server <id> node18
 ```
 
 **API Endpoints:**
@@ -553,25 +744,18 @@ launchctl software status --server <id> mysql
 | `GET` | `/servers/:id/services` | List installed services |
 | `GET` | `/servers/:id/services/create` | Available software |
 | `POST` | `/servers/:id/services` | Install software |
-| `POST` | `/servers/:id/services/:id` | Service operation (start/stop/restart/remove/status) |
-
-**Service Types:** php, mysql, postgresql, supervisor, redis, caddy, composer, node, bun, launch_agent
-
-**Operations:** start, stop, restart, remove, status
+| `POST` | `/servers/:id/services/:id` | Service operation (remove) |
 
 **Table Output:**
 
 ```
 Installed Software (server: production-web)
 
-  Name         Type    Version   Status    Default
-  PHP 8.3      php     8.3       running   yes
-  PHP 8.2      php     8.2       stopped   no
-  MySQL 8.0    mysql   8.0       running   -
-  Caddy        caddy   2.7       running   -
-  Redis        redis   7.2       running   -
-  Supervisor   proc    4.2       running   -
-  Node.js      node    20        installed -
+  Name         Type        Version   Status    Default
+  Caddy        webserver   2.7       running   -
+  MySQL 8.0    database    8.0       running   -
+  Redis        cache       7.2       running   -
+  Node.js      runtime     20        installed -
 ```
 
 **Files to Create:**
@@ -583,9 +767,7 @@ Installed Software (server: production-web)
 | `cmd/software/available.go` | Available to install |
 | `cmd/software/install.go` | Install software |
 | `cmd/software/remove.go` | Remove software |
-| `cmd/software/restart.go` | Restart service |
-| `cmd/software/status.go` | Service status |
-| `internal/api/services.go` | API methods |
+| `internal/api/software.go` | API methods (reuses services endpoints) |
 
 ---
 
@@ -660,7 +842,7 @@ Backups (server: production-web)
 ```
 launchctl scripts list
 launchctl scripts show <id>
-launchctl scripts create --name "Deploy cache clear" --content "php artisan cache:clear"
+launchctl scripts create --name "Clear cache" --content "rm -rf /tmp/cache/*"
 launchctl scripts run <id> --server <id> [--server <id2>]    Run on one or more servers
 launchctl scripts executions <id>                             List execution history
 launchctl scripts remove <id>
@@ -709,17 +891,6 @@ launchctl scripts remove <id>
 
 ### 3.3 `launchctl activity` — Activity/Audit Log
 
-**Note:** Activity log is currently internal to launch-go (no API routes). This feature requires a new API endpoint.
-
-**New API Endpoint Needed:**
-
-```
-GET /activity?subject_type=server&subject_id=abc123&page=1&per_page=20
-GET /activity?causer_id=user123
-GET /servers/:id/activity
-GET /servers/:serverId/sites/:id/activity
-```
-
 **Commands:**
 
 ```
@@ -727,6 +898,12 @@ launchctl activity                                       Recent team activity
 launchctl activity --server <id>                         Activity on a server
 launchctl activity --site <id> --server <id>             Activity on a site
 launchctl activity --user <id>                           Activity by a user
+```
+
+**API Endpoint (new, requires backend):**
+
+```
+GET /activity?subject_type=server&subject_id=abc123&page=1&per_page=20
 ```
 
 **Table Output:**
@@ -749,14 +926,9 @@ Recent Activity
 | `cmd/activity.go` | Activity command |
 | `internal/api/activity.go` | API methods |
 
-**Backend Changes Required:**
-- New route: `GET /activity` with filtering params
-- New handler in auth or a shared module
-- Activity query builder already exists internally
-
 ---
 
-### 3.4 `launchctl notifications` — Notification Management
+### 3.4 `launchctl notifications` — Notification Channel Management
 
 **Commands:**
 
@@ -773,11 +945,8 @@ launchctl notifications channels remove <id>
 |--------|----------|---------|
 | `GET` | `/settings/notifications` | List channels |
 | `POST` | `/settings/notifications` | Create channel |
-| `GET` | `/settings/notifications/:id` | Get channel |
-| `PUT` | `/settings/notifications/:id` | Update channel |
 | `DELETE` | `/settings/notifications/:id` | Delete channel |
 | `POST` | `/settings/notifications/:id/test` | Test channel |
-| `POST` | `/settings/notifications/:id/default` | Set as default |
 
 **Channel Types:** email, slack, discord, telegram
 
@@ -802,7 +971,37 @@ Notification Channels
 
 ---
 
-## Tier 4: Multi-Server / DevOps (Medium Value)
+### 3.5 `launchctl redirects` — URL Redirect Management
+
+```
+launchctl redirects list --server <id> --site <id>
+launchctl redirects add --server <id> --site <id> --from /old --to /new --type 301
+launchctl redirects remove <id> --server <id> --site <id>
+```
+
+**API Endpoints:**
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `GET` | `/servers/:serverId/sites/:id/redirects` | List redirects |
+| `POST` | `/servers/:serverId/sites/:id/redirects` | Create redirect |
+| `DELETE` | `/servers/:serverId/sites/:id/redirects/:id` | Delete redirect |
+
+**Redirect Types:** 301 (permanent), 302 (temporary), 307, 308
+
+**Files to Create:**
+
+| File | Purpose |
+|------|---------|
+| `cmd/redirects/redirects.go` | Parent command |
+| `cmd/redirects/list.go` | List redirects |
+| `cmd/redirects/add.go` | Add redirect |
+| `cmd/redirects/remove.go` | Remove redirect |
+| `internal/api/redirects.go` | API methods |
+
+---
+
+## Tier 4: Multi-Server / Advanced (Medium Value)
 
 ### 4.1 `launchctl lb` — Load Balancer Management
 
@@ -837,10 +1036,6 @@ launchctl lb health <upstream-id> --server <id>          Health check
 | `POST` | `/servers/:id/upstreams/:id/backends/:id/toggle-down` | Toggle down |
 | `GET` | `/servers/:id/upstreams/:id/health` | Health status |
 
-**Model Fields:**
-- Upstream: `Name`, `Address`, `Port`, `TLSSetting`, `LBPolicy` (round_robin/least_conn/ip_hash/first/random), `HealthCheckPath`, `HealthCheckInterval`
-- Backend: `SiteID`, `ServerID`, `Port` (default 8080), `IsDown`, `HealthStatus` (healthy/unhealthy/unknown)
-
 **Health Output:**
 
 ```
@@ -870,24 +1065,7 @@ Upstream Health: api.example.com
 
 ---
 
-### 4.2 `launchctl docker` — Docker Management
-
-**Note:** Docker module exists in the launch-go codebase (feature/load-balancer branch). Commands depend on that module being merged.
-
-**Commands:**
-
-```
-launchctl docker services --server <id>                  List Docker services
-launchctl docker logs <service-id> --server <id>         Tail service logs
-launchctl docker restart <service-id> --server <id>
-launchctl docker compose import --server <id> -f docker-compose.yml
-```
-
-**Deferred** until Docker module is on main branch.
-
----
-
-### 4.3 Profiles / Contexts
+### 4.2 Profiles / Contexts
 
 Support multiple API environments without re-logging in.
 
@@ -909,14 +1087,12 @@ launchctl config profiles remove staging
     "production": {
       "api_url": "https://api.launchctl.dev",
       "access_token": "...",
-      "refresh_token": "...",
       "team_id": "...",
       "team_name": "Acme Corp"
     },
     "staging": {
       "api_url": "https://staging-api.launchctl.dev",
       "access_token": "...",
-      "refresh_token": "...",
       "team_id": "...",
       "team_name": "Acme Staging"
     }
@@ -943,7 +1119,6 @@ $ launchctl whoami
   User:   John Doe (john@acme.com)
   Team:   Acme Corp
   API:    https://api.launchctl.dev
-  Token:  expires in 23h
 ```
 
 **File:** `cmd/whoami.go` — calls `GET /auth/user`
@@ -1001,81 +1176,17 @@ $ launchctl health
 
 ---
 
-### 5.5 `launchctl redirects` — URL Redirect Management
-
-```bash
-launchctl redirects list --server <id> --site <id>
-launchctl redirects add --server <id> --site <id> --from /old --to /new --type 301
-launchctl redirects remove <id> --server <id> --site <id>
-```
-
-**API Endpoints:**
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| `GET` | `/servers/:serverId/sites/:id/redirects` | List redirects |
-| `POST` | `/servers/:serverId/sites/:id/redirects` | Create redirect |
-| `DELETE` | `/servers/:serverId/sites/:id/redirects/:id` | Delete redirect |
-
-**Redirect Types:** 301 (permanent), 302 (temporary), 307, 308
-
-**Files to Create:**
-
-| File | Purpose |
-|------|---------|
-| `cmd/redirects/redirects.go` | Parent command |
-| `cmd/redirects/list.go` | List redirects |
-| `cmd/redirects/add.go` | Add redirect |
-| `cmd/redirects/remove.go` | Remove redirect |
-| `internal/api/redirects.go` | API methods |
-
----
-
-### 5.6 `launchctl recipe` — Composable Automation
-
-Chain multiple CLI operations into reusable recipes.
-
-```yaml
-# recipes/setup-laravel-site.yml
-name: Setup Laravel Site
-steps:
-  - run: sites create --server {{ server_id }}
-    save: site_id
-  - run: ssl install --server {{ server_id }} --site {{ site_id }}
-  - run: env push --server {{ server_id }} --site {{ site_id }} -f .env.production
-  - run: deploy trigger --server {{ server_id }} --site {{ site_id }} --wait
-  - run: run --server {{ server_id }} --site {{ site_id }} "php artisan migrate --force"
-```
-
-```bash
-launchctl recipe run recipes/setup-laravel-site.yml --var server_id=abc123
-launchctl recipe list                                    List saved recipes
-```
-
-**Deferred** — implement after core features are stable.
-
----
-
 ## Implementation Priority
 
 | Phase | Features | Effort |
 |-------|----------|--------|
 | **Phase A** | `init`, `whoami`, CI/CD mode, profiles | Small — config changes only |
-| **Phase B** | `env`, `run`, `logs` | Medium — 3 new command groups |
-| **Phase C** | `firewall`, `cron`, `ssl`, `ssh-keys`, `daemons` | Medium — 5 CRUD command groups |
-| **Phase D** | `software`, `backups`, `scripts` | Medium — 3 command groups with complex flows |
-| **Phase E** | `lb`, `notifications`, `activity`, `redirects` | Medium — 4 command groups |
-| **Phase F** | `health`, `open`, `diff`, `docker`, `recipe` | Small-Medium — utility commands |
-
-**Estimated new files per phase:**
-- Phase A: ~5 files modified
-- Phase B: ~8 new files
-- Phase C: ~25 new files
-- Phase D: ~20 new files
-- Phase E: ~18 new files
-- Phase F: ~8 new files
-
-**Total:** ~80 new files across all phases
+| **Phase B** | `env`, `run`, `logs`, `deploy logs` | Medium — 4 new command groups |
+| **Phase C** | `services`, `databases`, `ssh test/configure` | Medium — unified service management |
+| **Phase D** | `firewall`, `cron`, `ssl`, `ssh-keys`, `daemons` | Medium — 5 CRUD command groups |
+| **Phase E** | `software`, `backups`, `scripts` | Medium — 3 command groups with complex flows |
+| **Phase F** | `lb`, `notifications`, `activity`, `redirects` | Medium — 4 command groups |
+| **Phase G** | `health`, `open`, `diff` | Small — utility commands |
 
 ---
 

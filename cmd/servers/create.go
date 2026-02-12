@@ -26,6 +26,10 @@ var createCmd = &cobra.Command{
 			return fmt.Errorf("no server providers configured, add one in the web dashboard first")
 		}
 
+		fmt.Println()
+		fmt.Println(tui.Title.Render("  Create Server"))
+		fmt.Println()
+
 		var name, providerIdx, serverType, os, region, size string
 
 		providerOptions := make([]huh.Option[string], len(opts.Providers))
@@ -62,7 +66,9 @@ var createCmd = &cobra.Command{
 					Options(osOptions...).
 					Value(&os),
 			),
-		)
+		).
+			WithTheme(tui.FormTheme()).
+			WithWidth(60)
 
 		if err := form.Run(); err != nil {
 			return err
@@ -93,7 +99,9 @@ var createCmd = &cobra.Command{
 					Options(sizeOptions...).
 					Value(&size),
 			),
-		)
+		).
+			WithTheme(tui.FormTheme()).
+			WithWidth(60)
 
 		if err := form2.Run(); err != nil {
 			return err
@@ -113,7 +121,7 @@ var createCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Println(tui.Success.Render("Server created successfully"))
+		tui.ShowSuccess("Server created successfully")
 		fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(server.ID))
 		fmt.Println(tui.Label.Render("Name:") + tui.Value.Render(server.Name))
 		fmt.Println(tui.Label.Render("Status:") + tui.Value.Render(server.StatusLabel))

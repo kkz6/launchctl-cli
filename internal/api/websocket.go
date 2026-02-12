@@ -32,7 +32,7 @@ type DeploymentLogEvent struct {
 }
 
 func NewWSClient(cfg *config.Config) (*WSClient, error) {
-	baseURL := cfg.APIURL
+	baseURL := config.APIURL
 	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
 	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
 

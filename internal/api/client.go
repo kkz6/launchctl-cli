@@ -19,7 +19,7 @@ type Client struct {
 
 func NewClient(cfg *config.Config) *Client {
 	return &Client{
-		baseURL: cfg.APIURL,
+		baseURL: config.APIURL,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},

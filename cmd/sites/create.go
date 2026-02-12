@@ -23,6 +23,10 @@ var createCmd = &cobra.Command{
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
+		fmt.Println()
+		fmt.Println(tui.Title.Render("  Create Site"))
+		fmt.Println()
+
 		var address, siteType, phpVersion, webFolder string
 		var zeroDowntime bool
 
@@ -53,7 +57,9 @@ var createCmd = &cobra.Command{
 					Title("Zero Downtime Deployment?").
 					Value(&zeroDowntime),
 			),
-		)
+		).
+			WithTheme(tui.FormTheme()).
+			WithWidth(60)
 
 		if err := form.Run(); err != nil {
 			return err
@@ -71,7 +77,7 @@ var createCmd = &cobra.Command{
 		}
 
 		fmt.Println()
-		fmt.Println(tui.Success.Render("Site created successfully"))
+		tui.ShowSuccess("Site created successfully")
 		fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
 		fmt.Println(tui.Label.Render("Address:") + tui.Value.Render(site.Address))
 		fmt.Println(tui.Label.Render("Status:") + tui.Value.Render(site.Status))

@@ -26,6 +26,10 @@ var switchCmd = &cobra.Command{
 			return fmt.Errorf("no teams found")
 		}
 
+		fmt.Println()
+		fmt.Println(tui.Title.Render("  Switch Team"))
+		fmt.Println()
+
 		options := make([]huh.Option[string], len(teams))
 		for i, t := range teams {
 			label := t.Name
@@ -43,7 +47,9 @@ var switchCmd = &cobra.Command{
 					Options(options...).
 					Value(&selectedID),
 			),
-		)
+		).
+			WithTheme(tui.FormTheme()).
+			WithWidth(60)
 
 		if err := form.Run(); err != nil {
 			return err
@@ -65,7 +71,9 @@ var switchCmd = &cobra.Command{
 			return fmt.Errorf("failed to save config: %w", err)
 		}
 
-		fmt.Println(tui.Success.Render(fmt.Sprintf("Switched to team: %s", cfg.TeamName)))
+		fmt.Println()
+		tui.ShowSuccess(fmt.Sprintf("Switched to team: %s", cfg.TeamName))
+		fmt.Println()
 		return nil
 	},
 }

@@ -1,6 +1,10 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"fmt"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 var (
 	Green     = lipgloss.Color("#4ade80")
@@ -22,13 +26,16 @@ var (
 			Foreground(Slate)
 
 	Success = lipgloss.NewStyle().
-		Foreground(Green)
+		Foreground(Green).
+		Bold(true)
 
 	Error = lipgloss.NewStyle().
-		Foreground(Red)
+		Foreground(Red).
+		Bold(true)
 
 	Warning = lipgloss.NewStyle().
-		Foreground(Yellow)
+		Foreground(Yellow).
+		Bold(true)
 
 	Info = lipgloss.NewStyle().
 		Foreground(Blue)
@@ -46,6 +53,11 @@ var (
 
 	Value = lipgloss.NewStyle().
 		Foreground(White)
+
+	BoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(Green).
+			Padding(1, 2)
 
 	StatusConnected    = lipgloss.NewStyle().Foreground(Green).Bold(true)
 	StatusDisconnected = lipgloss.NewStyle().Foreground(Red).Bold(true)
@@ -66,4 +78,37 @@ func StatusStyle(status string) lipgloss.Style {
 	default:
 		return Dim
 	}
+}
+
+// ShowSuccess displays a success message
+func ShowSuccess(message string) {
+	fmt.Println(Success.Render("\u2713 " + message))
+}
+
+// ShowError displays an error message
+func ShowError(message string) {
+	fmt.Println(Error.Render("\u2717 " + message))
+}
+
+// ShowWarning displays a warning message
+func ShowWarning(message string) {
+	fmt.Println(Warning.Render("\u26a0 " + message))
+}
+
+// ShowInfo displays an info message
+func ShowInfo(message string) {
+	fmt.Println(Info.Render("\u25b8 " + message))
+}
+
+// CreateBox creates a styled box around content
+func CreateBox(title, content string, width int) string {
+	box := BoxStyle.Width(width)
+
+	titleStyle := lipgloss.NewStyle().
+		Bold(true).
+		Foreground(Green).
+		MarginBottom(1)
+
+	fullContent := titleStyle.Render(title) + "\n" + content
+	return box.Render(fullContent)
 }

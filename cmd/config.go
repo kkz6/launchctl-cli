@@ -28,7 +28,6 @@ var configShowCmd = &cobra.Command{
 
 		fmt.Println(tui.Title.Render("Configuration"))
 		fmt.Println()
-		fmt.Println(tui.Label.Render("API URL:") + tui.Value.Render(cfg.APIURL))
 		fmt.Println(tui.Label.Render("Team:") + tui.Value.Render(displayOrNone(cfg.TeamName)))
 		fmt.Println(tui.Label.Render("User:") + tui.Value.Render(displayOrNone(cfg.UserEmail)))
 		fmt.Println(tui.Label.Render("Authenticated:") + authStatusText(cfg.IsAuthenticated()))
@@ -40,7 +39,7 @@ var configShowCmd = &cobra.Command{
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration value",
-	Long:  "Available keys: api_url, team_id, team_name",
+	Long:  "Available keys: team_id, team_name",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]

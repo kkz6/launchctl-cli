@@ -12,8 +12,9 @@ const (
 	configFile = "config.json"
 )
 
+const APIURL = "https://launchctl.io"
+
 type Config struct {
-	APIURL      string `json:"api_url"`
 	AccessToken string `json:"access_token,omitempty"`
 	TeamID      string `json:"team_id,omitempty"`
 	TeamName    string `json:"team_name,omitempty"`
@@ -23,9 +24,7 @@ type Config struct {
 }
 
 func DefaultConfig() *Config {
-	return &Config{
-		APIURL: "http://localhost:8080",
-	}
+	return &Config{}
 }
 
 func configPath() (string, error) {
@@ -97,8 +96,6 @@ func (c *Config) ClearAuth() {
 
 func (c *Config) Get(key string) string {
 	switch key {
-	case "api_url":
-		return c.APIURL
 	case "access_token":
 		return c.AccessToken
 	case "team_id":
@@ -118,8 +115,6 @@ func (c *Config) Get(key string) string {
 
 func (c *Config) Set(key, value string) error {
 	switch key {
-	case "api_url":
-		c.APIURL = value
 	case "team_id":
 		c.TeamID = value
 	case "team_name":

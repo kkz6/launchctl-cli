@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
@@ -14,24 +14,24 @@ var loginCmd = &cobra.Command{
 	Short: "Authenticate with an API token",
 	Long:  "Authenticate using a personal access token generated from the web dashboard.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var token string
+		fmt.Println()
+		fmt.Println(tui.Title.Render("  Login to launchctl"))
+		fmt.Println(tui.Dim.Render("  Generate a token at https://launchctl.io/settings/api-tokens"))
+		fmt.Println()
 
-		form := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("API Token").
-					Placeholder("Paste your token from the dashboard").
-					EchoMode(huh.EchoModePassword).
-					Value(&token),
-			),
+		token, err := tui.GetInput(
+			"API Token",
+			"lctl_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+			true,
+			func(s string) error {
+				if s == "" {
+					return fmt.Errorf("token is required")
+				}
+				return nil
+			},
 		)
-
-		if err := form.Run(); err != nil {
+		if err != nil {
 			return err
-		}
-
-		if token == "" {
-			return fmt.Errorf("token is required")
 		}
 
 		client := api.NewClient(cfg)
@@ -44,25 +44,22 @@ var loginCmd = &cobra.Command{
 		cfg.AccessToken = token
 
 		if user.TwoFactorEnabled {
-			var code string
+			fmt.Println()
 
-			twoFactorForm := huh.NewForm(
-				huh.NewGroup(
-					huh.NewInput().
-						Title("Two-Factor Code").
-						Placeholder("Enter your 6-digit code").
-						Value(&code),
-				),
+			code, err := tui.GetInput(
+				"Two-Factor Authentication",
+				"000000",
+				false,
+				func(s string) error {
+					if s == "" {
+						return fmt.Errorf("two-factor code is required")
+					}
+					return nil
+				},
 			)
-
-			if err := twoFactorForm.Run(); err != nil {
+			if err != nil {
 				cfg.AccessToken = ""
 				return err
-			}
-
-			if code == "" {
-				cfg.AccessToken = ""
-				return fmt.Errorf("two-factor code is required")
 			}
 
 			if err := client.VerifyTwoFactor(code); err != nil {
@@ -86,14 +83,20 @@ var loginCmd = &cobra.Command{
 			return fmt.Errorf("failed to save credentials: %w", err)
 		}
 
-		fmt.Println()
-		fmt.Println(tui.Success.Render("Logged in successfully"))
-		fmt.Println()
-		fmt.Println(tui.Label.Render("User:") + tui.Value.Render(user.Name))
-		fmt.Println(tui.Label.Render("Email:") + tui.Value.Render(user.Email))
+		labelStyle := lipgloss.NewStyle().Foreground(tui.Slate).Width(12)
+		valueStyle := lipgloss.NewStyle().Foreground(tui.White)
+
+		var content string
+		content += tui.Success.Render("Logged in successfully") + "\n\n"
+		content += labelStyle.Render("User") + valueStyle.Render(user.Name) + "\n"
+		content += labelStyle.Render("Email") + valueStyle.Render(user.Email)
 		if cfg.TeamName != "" {
-			fmt.Println(tui.Label.Render("Team:") + tui.Value.Render(cfg.TeamName))
+			content += "\n" + labelStyle.Render("Team") + valueStyle.Render(cfg.TeamName)
 		}
+
+		fmt.Println()
+		fmt.Println(tui.BoxStyle.Width(60).Render(content))
+		fmt.Println()
 
 		return nil
 	},
