@@ -38,7 +38,13 @@ var triggerCmd = &cobra.Command{
 
 		fmt.Println(tui.Success.Render(fmt.Sprintf("Deployment %s triggered", deployment.ID)))
 
-		ws, err := api.NewWSClient(cfg)
+		jwt, err := client.ExchangeToken()
+		if err != nil {
+			fmt.Println(tui.Warning.Render("Could not authenticate for live logs, deployment is running in the background"))
+			return nil
+		}
+
+		ws, err := api.NewWSClient(cfg, jwt)
 		if err != nil {
 			fmt.Println(tui.Warning.Render("Could not connect to live logs, deployment is running in the background"))
 			return nil

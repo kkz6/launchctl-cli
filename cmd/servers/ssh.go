@@ -2,12 +2,10 @@ package servers
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"strconv"
 
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/terminal"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +13,7 @@ var sshUser string
 
 var sshCmd = &cobra.Command{
 	Use:   "ssh <id>",
-	Short: "SSH into a server",
+	Short: "Open a terminal session on a server",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, _ := config.Load()
@@ -26,8 +24,8 @@ var sshCmd = &cobra.Command{
 			return fmt.Errorf("failed to get server: %w", err)
 		}
 
-		if server.PublicIPv4 == nil {
-			return fmt.Errorf("server has no public IP address")
+		if !server.Connected {
+			return fmt.Errorf("server %q is not connected", server.Name)
 		}
 
 		user := sshUser
@@ -35,22 +33,18 @@ var sshCmd = &cobra.Command{
 			user = server.Username
 		}
 
-		sshArgs := []string{
-			"-p", strconv.Itoa(server.SSHPort),
-			fmt.Sprintf("%s@%s", user, *server.PublicIPv4),
-		}
-
-		sshBin, err := exec.LookPath("ssh")
+		jwt, err := client.ExchangeToken()
 		if err != nil {
-			return fmt.Errorf("ssh not found in PATH")
+			return fmt.Errorf("failed to authenticate: %w", err)
 		}
 
-		c := exec.Command(sshBin, sshArgs...)
-		c.Stdin = os.Stdin
-		c.Stdout = os.Stdout
-		c.Stderr = os.Stderr
+		fmt.Printf("Connecting to %s...\n", server.Name)
 
-		return c.Run()
+		return terminal.Connect(cfg, terminal.Options{
+			ServerID: server.ID,
+			Username: user,
+			Token:    jwt,
+		})
 	},
 }
 

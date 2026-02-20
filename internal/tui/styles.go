@@ -7,6 +7,7 @@ import (
 )
 
 var (
+	Indigo    = lipgloss.Color("#818CF8")
 	Green     = lipgloss.Color("#4ade80")
 	Slate     = lipgloss.Color("#94a3b8")
 	Red       = lipgloss.Color("#f87171")
@@ -20,7 +21,7 @@ var (
 
 	Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(Green)
+		Foreground(Indigo)
 
 	Subtitle = lipgloss.NewStyle().
 			Foreground(Slate)
@@ -49,6 +50,7 @@ var (
 
 	Label = lipgloss.NewStyle().
 		Foreground(Slate).
+		PaddingLeft(2).
 		Width(20)
 
 	Value = lipgloss.NewStyle().
@@ -56,7 +58,7 @@ var (
 
 	BoxStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(Green).
+			BorderForeground(Indigo).
 			Padding(1, 2)
 
 	StatusConnected    = lipgloss.NewStyle().Foreground(Green).Bold(true)
@@ -82,22 +84,22 @@ func StatusStyle(status string) lipgloss.Style {
 
 // ShowSuccess displays a success message
 func ShowSuccess(message string) {
-	fmt.Println(Success.Render("\u2713 " + message))
+	fmt.Println("  " + Success.Render("\u2713 "+message))
 }
 
 // ShowError displays an error message
 func ShowError(message string) {
-	fmt.Println(Error.Render("\u2717 " + message))
+	fmt.Println("  " + Error.Render("\u2717 "+message))
 }
 
 // ShowWarning displays a warning message
 func ShowWarning(message string) {
-	fmt.Println(Warning.Render("\u26a0 " + message))
+	fmt.Println("  " + Warning.Render("\u26a0 "+message))
 }
 
 // ShowInfo displays an info message
 func ShowInfo(message string) {
-	fmt.Println(Info.Render("\u25b8 " + message))
+	fmt.Println("  " + Info.Render("\u25b8 "+message))
 }
 
 // CreateBox creates a styled box around content
@@ -106,7 +108,7 @@ func CreateBox(title, content string, width int) string {
 
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(Green).
+		Foreground(Indigo).
 		MarginBottom(1)
 
 	fullContent := titleStyle.Render(title) + "\n" + content

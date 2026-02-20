@@ -15,7 +15,7 @@ var loginCmd = &cobra.Command{
 	Long:  "Authenticate using a personal access token generated from the web dashboard.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println()
-		fmt.Println(tui.Title.Render("  Login to launchctl"))
+		fmt.Println(tui.Title.Render("  Login to lctl"))
 		fmt.Println(tui.Dim.Render("  Generate a token at https://launchctl.io/settings/api-tokens"))
 		fmt.Println()
 

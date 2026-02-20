@@ -14,4 +14,5 @@ func init() {
 	DeployCmd.AddCommand(listCmd)
 	DeployCmd.AddCommand(showCmd)
 	DeployCmd.AddCommand(rollbackCmd)
+	DeployCmd.AddCommand(logsCmd)
 }

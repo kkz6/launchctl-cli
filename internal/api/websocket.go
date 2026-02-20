@@ -31,7 +31,7 @@ type DeploymentLogEvent struct {
 	Step         string `json:"step,omitempty"`
 }
 
-func NewWSClient(cfg *config.Config) (*WSClient, error) {
+func NewWSClient(cfg *config.Config, token string) (*WSClient, error) {
 	baseURL := config.APIURL
 	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
 	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
@@ -42,7 +42,7 @@ func NewWSClient(cfg *config.Config) (*WSClient, error) {
 	}
 
 	q := u.Query()
-	q.Set("token", cfg.AccessToken)
+	q.Set("token", token)
 	q.Set("team_id", cfg.TeamID)
 	u.RawQuery = q.Encode()
 

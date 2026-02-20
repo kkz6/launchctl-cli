@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -11,42 +10,79 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-// SimpleItem for selection lists
+var (
+	itemNormalStyle = lipgloss.NewStyle().
+			PaddingLeft(4).
+			Foreground(Slate)
+
+	itemSelectedStyle = lipgloss.NewStyle().
+				PaddingLeft(2).
+				Foreground(Indigo).
+				Bold(true)
+
+	itemNumberStyle = lipgloss.NewStyle().
+			Foreground(Muted)
+
+	itemNumberSelectedStyle = lipgloss.NewStyle().
+				Foreground(Indigo)
+
+	actionNormalStyle = lipgloss.NewStyle().
+				PaddingLeft(4).
+				Foreground(DarkSlate)
+
+	actionSelectedStyle = lipgloss.NewStyle().
+				PaddingLeft(2).
+				Foreground(Slate).
+				Bold(true)
+)
+
 type simpleItem struct {
-	title string
-	index int
+	title    string
+	index    int
+	isAction bool
 }
 
 func (i simpleItem) Title() string       { return i.title }
 func (i simpleItem) Description() string { return "" }
 func (i simpleItem) FilterValue() string { return i.title }
 
-// simpleDelegate renders compact list items
+type separatorItem struct{}
+
+func (s separatorItem) Title() string       { return "" }
+func (s separatorItem) Description() string { return "" }
+func (s separatorItem) FilterValue() string { return "" }
+
 type simpleDelegate struct{}
 
 func (d simpleDelegate) Height() int                             { return 1 }
 func (d simpleDelegate) Spacing() int                            { return 0 }
 func (d simpleDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d simpleDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+	if _, isSep := listItem.(separatorItem); isSep {
+		return
+	}
+
 	i, ok := listItem.(simpleItem)
 	if !ok {
 		return
 	}
 
-	str := fmt.Sprintf("%d. %s", index+1, i.title)
-
-	fn := lipgloss.NewStyle().PaddingLeft(2).Render
-	if index == m.Index() {
-		fn = func(s ...string) string {
-			return lipgloss.NewStyle().
-				PaddingLeft(1).
-				Foreground(Green).
-				Bold(true).
-				Render("\u25b8 " + strings.Join(s, " "))
+	if i.isAction {
+		if index == m.Index() {
+			fmt.Fprint(w, actionSelectedStyle.Render("▸ "+i.title))
+		} else {
+			fmt.Fprint(w, actionNormalStyle.Render(i.title))
 		}
+		return
 	}
 
-	fmt.Fprint(w, fn(str))
+	if index == m.Index() {
+		num := itemNumberSelectedStyle.Render(fmt.Sprintf("%d.", i.index+1))
+		fmt.Fprint(w, itemSelectedStyle.Render(fmt.Sprintf("▸ %s %s", num, i.title)))
+	} else {
+		num := itemNumberStyle.Render(fmt.Sprintf("%d.", i.index+1))
+		fmt.Fprint(w, itemNormalStyle.Render(fmt.Sprintf("%s %s", num, i.title)))
+	}
 }
 
 type selectionModel struct {
@@ -61,6 +97,8 @@ func (m selectionModel) Init() tea.Cmd {
 }
 
 func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	prevIdx := m.list.Index()
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
@@ -74,19 +112,22 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 
 		case "enter":
-			i, ok := m.list.SelectedItem().(simpleItem)
-			if ok {
+			if i, ok := m.list.SelectedItem().(simpleItem); ok {
 				m.choice = i.index
 			}
 			return m, tea.Quit
 
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			num := int(keypress[0] - '0')
-			if num <= len(m.list.Items()) {
-				m.list.Select(num - 1)
-				if item, ok := m.list.SelectedItem().(simpleItem); ok {
-					m.choice = item.index
-					return m, tea.Quit
+			count := 0
+			for idx, item := range m.list.Items() {
+				if si, ok := item.(simpleItem); ok {
+					count++
+					if count == num {
+						m.list.Select(idx)
+						m.choice = si.index
+						return m, tea.Quit
+					}
 				}
 			}
 		}
@@ -94,6 +135,16 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
+	if _, isSep := m.list.SelectedItem().(separatorItem); isSep {
+		newIdx := m.list.Index()
+		if newIdx > prevIdx {
+			m.list.CursorDown()
+		} else {
+			m.list.CursorUp()
+		}
+	}
+
 	return m, cmd
 }
 
@@ -103,7 +154,7 @@ func (m selectionModel) View() string {
 	}
 
 	titleStyle := lipgloss.NewStyle().
-		Foreground(Green).
+		Foreground(Indigo).
 		Bold(true).
 		MarginBottom(1)
 
@@ -113,19 +164,28 @@ func (m selectionModel) View() string {
 	helpStyle := lipgloss.NewStyle().
 		Foreground(Muted).
 		MarginTop(1)
-	view += "\n" + helpStyle.Render("\u2191/\u2193 navigate \u2022 1-9 quick select \u2022 enter select \u2022 esc cancel")
+	view += "\n" + helpStyle.Render("↑/k up • ↓/j down • 1-9 quick select • enter select • esc cancel")
 
-	return lipgloss.NewStyle().Margin(1, 0).Render(view)
+	return lipgloss.NewStyle().Margin(1, 0).PaddingLeft(2).Render(view)
 }
 
-// SelectFromList allows selecting from a list using arrow keys with devtools-style UI
-func SelectFromList(title string, options []string) (int, error) {
+// SelectFromList allows selecting from a list using arrow keys.
+// Regular options are numbered; actions (variadic) are rendered below a
+// separator in a muted style. Returned index spans both slices continuously:
+// 0..len(options)-1 for options, len(options)..len(options)+len(actions)-1 for actions.
+func SelectFromList(title string, options []string, actions ...string) (int, error) {
 	items := []list.Item{}
-	for i, option := range options {
-		items = append(items, simpleItem{
-			title: option,
-			index: i,
-		})
+	idx := 0
+	for _, option := range options {
+		items = append(items, simpleItem{title: option, index: idx})
+		idx++
+	}
+	if len(actions) > 0 {
+		items = append(items, separatorItem{})
+		for _, action := range actions {
+			items = append(items, simpleItem{title: action, index: idx, isAction: true})
+			idx++
+		}
 	}
 
 	listHeight := len(items) + 2

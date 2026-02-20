@@ -79,6 +79,20 @@ func decodeResponse[T any](resp *http.Response) (*APIResponse[T], error) {
 	return &result, nil
 }
 
+func (c *Client) ExchangeToken() (string, error) {
+	resp, err := c.doRequest("POST", "/api/auth/token", nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to exchange token: %w", err)
+	}
+
+	result, err := decodeResponse[AuthResponse](resp)
+	if err != nil {
+		return "", fmt.Errorf("failed to exchange token: %w", err)
+	}
+
+	return result.Data.AccessToken, nil
+}
+
 func UnmarshalEventData(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }

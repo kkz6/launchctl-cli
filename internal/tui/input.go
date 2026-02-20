@@ -29,7 +29,7 @@ func initialInputModel(title, placeholder string, password bool, validator func(
 	}
 
 	ti.Prompt = lipgloss.NewStyle().
-		Foreground(Green).
+		Foreground(Indigo).
 		Render("\u25b8 ")
 
 	return inputModel{
@@ -71,7 +71,7 @@ func (m inputModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m inputModel) View() string {
 	titleStyle := lipgloss.NewStyle().
-		Foreground(Green).
+		Foreground(Indigo).
 		Bold(true).
 		MarginBottom(1)
 

@@ -23,7 +23,7 @@ var authStatusCmd = &cobra.Command{
 			fmt.Println(tui.BoxStyle.Width(60).Render(
 				tui.Warning.Render("Not authenticated") + "\n\n" +
 					tui.Dim.Render("Run ") +
-					tui.Bold.Render("launchctl login") +
+					tui.Bold.Render("lctl login") +
 					tui.Dim.Render(" to authenticate."),
 			))
 			fmt.Println()
@@ -43,7 +43,7 @@ var authStatusCmd = &cobra.Command{
 			content += labelStyle.Render("User") + valueStyle.Render(cfg.UserName) + "\n"
 			content += labelStyle.Render("Email") + valueStyle.Render(cfg.UserEmail) + "\n\n"
 			content += tui.Dim.Render("Run ") +
-				tui.Bold.Render("launchctl login") +
+				tui.Bold.Render("lctl login") +
 				tui.Dim.Render(" to re-authenticate.")
 		} else {
 			content += tui.Success.Render("Authenticated") + "\n\n"

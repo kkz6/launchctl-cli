@@ -145,6 +145,7 @@ type SiteResponse struct {
 type DeploymentResponse struct {
 	ID           string      `json:"id"`
 	SiteID       string      `json:"site_id"`
+	ServerID     string      `json:"server_id,omitempty"`
 	UserID       *string     `json:"user_id,omitempty"`
 	TaskID       *string     `json:"task_id,omitempty"`
 	Status       string      `json:"status"`
@@ -154,6 +155,18 @@ type DeploymentResponse struct {
 	IsRollback   bool        `json:"is_rollback"`
 	CreatedAt    string      `json:"created_at"`
 	UpdatedAt    string      `json:"updated_at"`
+}
+
+type TaskResponse struct {
+	ID        string  `json:"id"`
+	ServerID  string  `json:"server_id"`
+	Type      string  `json:"type"`
+	Status    string  `json:"status"`
+	Name      string  `json:"name"`
+	User      string  `json:"user"`
+	Output    *string `json:"output,omitempty"`
+	ExitCode  *int    `json:"exit_code,omitempty"`
+	CreatedAt string  `json:"created_at"`
 }
 
 type CommitData struct {
@@ -190,6 +203,14 @@ type DashboardActivity struct {
 
 type ActivityUser struct {
 	Name string `json:"name"`
+}
+
+type AuthResponse struct {
+	User         UserResponse `json:"user"`
+	AccessToken  string       `json:"access_token"`
+	RefreshToken string       `json:"refresh_token"`
+	ExpiresIn    int          `json:"expires_in"`
+	TokenType    string       `json:"token_type"`
 }
 
 type CreateServerRequest struct {

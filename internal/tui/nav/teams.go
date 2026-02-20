@@ -3,7 +3,6 @@ package nav
 import (
 	"fmt"
 
-	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/output"
@@ -12,15 +11,14 @@ import (
 
 func teamsMenu(client *api.Client, cfg *config.Config) {
 	for {
-		clearScreen()
-		printHeader("launchctl", "Teams")
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Teams")
 
 		choice, err := tui.SelectFromList("Teams", []string{
 			"List Teams",
 			"Switch Team",
 			"Team Members",
-			"Back",
-		})
+		}, "Back")
 		if err != nil || choice == 3 {
 			return
 		}
@@ -37,13 +35,13 @@ func teamsMenu(client *api.Client, cfg *config.Config) {
 }
 
 func listTeams(client *api.Client, cfg *config.Config) {
-	clearScreen()
-	printHeader("launchctl", "Teams", "List")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Teams", "List")
 
 	teams, err := client.ListTeams()
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to list teams: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -68,54 +66,44 @@ func listTeams(client *api.Client, cfg *config.Config) {
 	}
 
 	output.RenderTable("Teams", []string{"", "ID", "Name", "Type"}, rows)
-	waitForEnter()
+	tui.WaitForEnter()
 }
 
 func switchTeam(client *api.Client, cfg *config.Config) {
-	clearScreen()
-	printHeader("launchctl", "Teams", "Switch")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Teams", "Switch")
 
 	teams, err := client.ListTeams()
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to list teams: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
 	if len(teams) == 0 {
 		tui.ShowInfo("No teams found")
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
-	options := make([]huh.Option[string], len(teams))
-	for i, t := range teams {
+	options := make([]string, 0, len(teams))
+	for _, t := range teams {
 		label := t.Name
 		if t.ID == cfg.TeamID {
 			label += " (current)"
 		}
-		options[i] = huh.NewOption(label, t.ID)
+		options = append(options, label)
 	}
 
-	var selectedID string
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Select team").
-				Options(options...).
-				Value(&selectedID),
-		),
-	).
-		WithTheme(tui.FormTheme()).
-		WithWidth(60)
-
-	if err := form.Run(); err != nil {
+	choice, err := tui.SelectFromList("Select team", options, "Back")
+	if err != nil || choice == len(options) {
 		return
 	}
 
+	selectedID := teams[choice].ID
 	if err := client.SwitchTeam(selectedID); err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to switch team: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -129,30 +117,30 @@ func switchTeam(client *api.Client, cfg *config.Config) {
 
 	if err := cfg.Save(); err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to save config: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
 	fmt.Println()
 	tui.ShowSuccess(fmt.Sprintf("Switched to team: %s", cfg.TeamName))
-	waitForEnter()
+	tui.WaitForEnter()
 }
 
 func teamMembers(client *api.Client, cfg *config.Config) {
-	clearScreen()
-	printHeader("launchctl", "Teams", "Members")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Teams", "Members")
 
 	teamID := cfg.TeamID
 	if teamID == "" {
 		tui.ShowWarning("No team selected. Switch teams first.")
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
 	members, err := client.GetTeamMembers(teamID)
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to list members: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -166,5 +154,5 @@ func teamMembers(client *api.Client, cfg *config.Config) {
 	}
 
 	output.RenderTable("Team Members", []string{"Name", "Email", "Role"}, rows)
-	waitForEnter()
+	tui.WaitForEnter()
 }

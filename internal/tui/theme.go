@@ -12,11 +12,11 @@ func FormTheme() *huh.Theme {
 		PaddingLeft(1).
 		BorderStyle(lipgloss.ThickBorder()).
 		BorderLeft(true).
-		BorderForeground(Green)
+		BorderForeground(Indigo)
 
 	t.Focused.Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(Green).
+		Foreground(Indigo).
 		MarginBottom(1)
 
 	t.Focused.Description = lipgloss.NewStyle().
@@ -24,7 +24,7 @@ func FormTheme() *huh.Theme {
 		MarginBottom(1)
 
 	t.Focused.TextInput.Prompt = lipgloss.NewStyle().
-		Foreground(Green)
+		Foreground(Indigo)
 
 	t.Focused.TextInput.Text = lipgloss.NewStyle().
 		Foreground(White)
@@ -33,22 +33,22 @@ func FormTheme() *huh.Theme {
 		Foreground(Muted)
 
 	t.Focused.TextInput.Cursor = lipgloss.NewStyle().
-		Foreground(Green)
+		Foreground(Indigo)
 
 	t.Focused.SelectSelector = lipgloss.NewStyle().
-		Foreground(Green)
+		Foreground(Indigo)
 
 	t.Focused.Option = lipgloss.NewStyle().
 		Foreground(White)
 
 	t.Focused.SelectedOption = lipgloss.NewStyle().
-		Foreground(Green).
+		Foreground(Indigo).
 		Bold(true)
 
 	t.Focused.FocusedButton = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#0f172a")).
-		Background(Green).
+		Background(Indigo).
 		Padding(0, 2)
 
 	t.Focused.BlurredButton = lipgloss.NewStyle().

@@ -1,7 +1,7 @@
 .PHONY: build run clean
 
 VERSION ?= 0.1.0
-BINARY = bin/launchctl
+BINARY = bin/lctl
 LDFLAGS = -ldflags "-X github.com/kkz6/launchctl/cmd.Version=$(VERSION)"
 
 build:

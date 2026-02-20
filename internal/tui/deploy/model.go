@@ -76,7 +76,7 @@ type Model struct {
 func NewModel(siteName string, ws *api.WSClient, channel string) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(tui.Green)
+	s.Style = lipgloss.NewStyle().Foreground(tui.Indigo)
 
 	vp := viewport.New(80, 20)
 

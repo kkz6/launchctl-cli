@@ -14,7 +14,7 @@ var statusCmd = &cobra.Command{
 	Short: "Show dashboard overview",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !cfg.IsAuthenticated() {
-			return fmt.Errorf("not logged in, run: launchctl login")
+			return fmt.Errorf("not logged in, run: lctl login")
 		}
 
 		client := api.NewClient(cfg)

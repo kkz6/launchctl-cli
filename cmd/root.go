@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/kkz6/launchctl/cmd/deploy"
 	"github.com/kkz6/launchctl/cmd/servers"
@@ -11,6 +12,7 @@ import (
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/splash"
+	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/kkz6/launchctl/internal/tui/nav"
 	"github.com/spf13/cobra"
 )
@@ -23,9 +25,9 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "launchctl",
+	Use:   "lctl",
 	Short: "CLI for managing launchctl servers, sites, and deployments",
-	Long:  "launchctl is a command-line tool for managing your servers, sites, and deployments.",
+	Long:  "lctl is a command-line tool for managing your launchctl servers, sites, and deployments.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		var err error
 		cfg, err = config.Load()
@@ -36,8 +38,11 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
+		tui.ClearScreen()
 		fmt.Print(splash.Render(Version))
 		fmt.Println()
+		time.Sleep(2 * time.Second)
+		tui.ClearScreen()
 
 		if cfg.IsAuthenticated() {
 			client := api.NewClient(cfg)

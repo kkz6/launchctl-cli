@@ -1,108 +1,94 @@
 package splash
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
-// Lowercase block-letter glyphs (variable width, 5 rows tall).
-// Ascenders (l, h, t) use all 5 rows; body letters use rows 1-4.
-var glyphs = map[rune][5]string{
-	'l': {"██", "██", "██", "██", "██"},
-	'a': {"     ", " ███ ", "█  ██", " ████", " ███ "},
-	'u': {"      ", "██  ██", "██  ██", "██  ██", " ████ "},
-	'n': {"      ", "██████", "██  ██", "██  ██", "██  ██"},
-	'c': {"    ", " ███", "███ ", "███ ", " ███"},
-	'h': {"██    ", "██████", "██  ██", "██  ██", "██  ██"},
-	't': {" ██ ", "████", " ██ ", " ██ ", " ██ "},
+// 3-row uppercase glyphs using Unicode half-block characters.
+// Follows the Charm Crush wordmark style.
+var glyphs = map[rune][3]string{
+	'L': {"█     ", "█     ", "▀▀▀▀▀ "},
+	'A': {"▄▀▀▀▄ ", "█▀▀▀█ ", "▀   ▀ "},
+	'U': {"█   █ ", "█   █ ", " ▀▀▀  "},
+	'N': {"█▄  █ ", "█ ▀▄█ ", "▀   ▀ "},
+	'C': {"▄▀▀▀▀ ", "█     ", " ▀▀▀▀ "},
+	'H': {"█   █ ", "█▀▀▀█ ", "▀   ▀ "},
+	'T': {"▀▀█▀▀ ", "  █   ", "  ▀   "},
 }
 
-var (
-	// Dark terminal: light green gradient
-	darkRowColors = []string{
-		"#86efac",
-		"#4ade80",
-		"#22c55e",
-		"#16a34a",
-		"#15803d",
-	}
+func lerp(a, b, t float64) float64 {
+	return a + (b-a)*t
+}
 
-	// Light terminal: dark green gradient
-	lightRowColors = []string{
-		"#15803d",
-		"#16a34a",
-		"#166534",
-		"#14532d",
-		"#052e16",
-	}
-)
+func gradientColor(r1, g1, b1, r2, g2, b2 int, t float64) lipgloss.Color {
+	r := int(lerp(float64(r1), float64(r2), t))
+	g := int(lerp(float64(g1), float64(g2), t))
+	b := int(lerp(float64(b1), float64(b2), t))
+
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
+}
 
 func Render(version string) string {
 	isDark := lipgloss.HasDarkBackground()
 
-	rowColors := darkRowColors
-	if !isDark {
-		rowColors = lightRowColors
+	// Gradient: indigo → violet
+	var r1, g1, b1, r2, g2, b2 int
+	if isDark {
+		r1, g1, b1 = 0x81, 0x8C, 0xF8 // #818CF8
+		r2, g2, b2 = 0xC0, 0x84, 0xFC // #C084FC
+	} else {
+		r1, g1, b1 = 0x4F, 0x46, 0xE5 // #4F46E5
+		r2, g2, b2 = 0x7C, 0x3A, 0xED // #7C3AED
 	}
 
-	taglineFg := lipgloss.Color("#0f172a")
-	taglineBg := lipgloss.Color("#4ade80")
-	versionFg := lipgloss.Color("#64748b")
-	subtitleFg := lipgloss.Color("#94a3b8")
+	word := "LAUNCHCTL"
 
-	if !isDark {
-		taglineFg = lipgloss.Color("#f8fafc")
-		taglineBg = lipgloss.Color("#15803d")
-		versionFg = lipgloss.Color("#475569")
-		subtitleFg = lipgloss.Color("#475569")
-	}
-
-	taglineStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(taglineFg).
-		Background(taglineBg).
-		Padding(0, 1)
-
-	versionStyle := lipgloss.NewStyle().
-		Foreground(versionFg)
-
-	subtitleStyle := lipgloss.NewStyle().
-		Foreground(subtitleFg).
-		Italic(true)
-
-	word := "launchctl"
-
-	var rows [5]string
-	for row := 0; row < 5; row++ {
+	var rows [3]string
+	for row := 0; row < 3; row++ {
 		var parts []string
 		for _, ch := range word {
 			if g, ok := glyphs[ch]; ok {
 				parts = append(parts, g[row])
 			}
 		}
-		rows[row] = strings.Join(parts, " ")
+		rows[row] = strings.Join(parts, "")
 	}
 
 	var b strings.Builder
-	b.WriteString("\n")
+	b.WriteString("\n\n\n")
 
-	for i, row := range rows {
-		style := lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color(rowColors[i]))
+	for _, row := range rows {
+		runes := []rune(row)
+		width := len(runes)
 		b.WriteString("  ")
-		b.WriteString(style.Render(row))
+
+		for i, r := range runes {
+			if r == ' ' {
+				b.WriteRune(' ')
+				continue
+			}
+
+			t := 0.0
+			if width > 1 {
+				t = float64(i) / float64(width-1)
+			}
+
+			color := gradientColor(r1, g1, b1, r2, g2, b2, t)
+			style := lipgloss.NewStyle().
+				Bold(true).
+				Foreground(color)
+			b.WriteString(style.Render(string(r)))
+		}
+
 		b.WriteString("\n")
 	}
 
-	b.WriteString("  ")
-	b.WriteString(subtitleStyle.Render("Server management & deployment toolkit"))
+	b.WriteString("  Server management & deployment toolkit")
 	b.WriteString("\n\n")
-	b.WriteString("  ")
-	b.WriteString(taglineStyle.Render("launchctl.io"))
-	b.WriteString("  ")
-	b.WriteString(versionStyle.Render("v" + version))
+	b.WriteString("  launchctl.io  v" + version)
 	b.WriteString("\n")
 
 	return b.String()

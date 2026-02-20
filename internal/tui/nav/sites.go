@@ -14,13 +14,13 @@ import (
 
 func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName string) {
 	for {
-		clearScreen()
-		printHeader("launchctl", "Servers", serverName, "Sites")
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites")
 
 		sites, err := client.ListSites(serverID)
 		if err != nil {
 			tui.ShowError(fmt.Sprintf("Failed to list sites: %s", err))
-			waitForEnter()
+			tui.WaitForEnter()
 			return
 		}
 
@@ -44,18 +44,17 @@ func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName stri
 			output.RenderTable("Sites", []string{"ID", "Address", "Type", "Status", "Last Deploy"}, rows)
 		}
 
-		options := make([]string, 0, len(sites)+2)
+		options := make([]string, 0, len(sites))
 		for _, s := range sites {
 			options = append(options, s.Address)
 		}
-		options = append(options, "Create Site", "Back")
 
-		choice, err := tui.SelectFromList("Select a site", options)
-		if err != nil || choice == len(options)-1 {
+		choice, err := tui.SelectFromList("Select a site", options, "Create Site", "Back")
+		if err != nil || choice == len(options)+1 {
 			return
 		}
 
-		if choice == len(options)-2 {
+		if choice == len(options) {
 			createSite(client, cfg, serverID, serverName)
 			continue
 		}
@@ -66,12 +65,13 @@ func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName stri
 
 func siteActions(client *api.Client, cfg *config.Config, serverID, serverName string, site api.SiteResponse) {
 	for {
-		clearScreen()
-		printHeader("launchctl", "Servers", serverName, "Sites", site.Address)
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address)
 
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Site: %s", site.Address),
-			[]string{"Show Details", "Deploy", "View Deployments", "Back"},
+			[]string{"Show Details", "Deploy", "View Deployments"},
+			"Back",
 		)
 		if err != nil || choice == 3 {
 			return
@@ -89,8 +89,8 @@ func siteActions(client *api.Client, cfg *config.Config, serverID, serverName st
 }
 
 func showSiteDetails(serverName string, site api.SiteResponse) {
-	clearScreen()
-	printHeader("launchctl", "Servers", serverName, "Sites", site.Address, "Details")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Details")
 
 	fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
 	fmt.Println(tui.Label.Render("Status:") + output.StatusDot(site.Status))
@@ -117,12 +117,12 @@ func showSiteDetails(serverName string, site api.SiteResponse) {
 		fmt.Println(tui.Label.Render("Created:") + tui.Dim.Render(site.LatestDeployment.CreatedAt))
 	}
 
-	waitForEnter()
+	tui.WaitForEnter()
 }
 
 func deploySite(client *api.Client, cfg *config.Config, serverID, serverName string, site api.SiteResponse) {
-	clearScreen()
-	printHeader("launchctl", "Servers", serverName, "Sites", site.Address, "Deploy")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deploy")
 
 	var confirm bool
 	huh.NewConfirm().
@@ -133,23 +133,30 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 
 	if !confirm {
 		fmt.Println(tui.Dim.Render("Cancelled"))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
 	deployment, err := client.DeploySite(serverID, site.ID)
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to trigger deployment: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
 	tui.ShowSuccess(fmt.Sprintf("Deployment %s triggered", deployment.ID))
 
-	ws, err := api.NewWSClient(cfg)
+	jwt, err := client.ExchangeToken()
+	if err != nil {
+		tui.ShowWarning("Could not authenticate for live logs, deployment is running in the background")
+		tui.WaitForEnter()
+		return
+	}
+
+	ws, err := api.NewWSClient(cfg, jwt)
 	if err != nil {
 		tui.ShowWarning("Could not connect to live logs, deployment is running in the background")
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 	defer ws.Close()
@@ -157,7 +164,7 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 	channel := fmt.Sprintf("team:%s", cfg.TeamID)
 	if err := ws.Subscribe(channel); err != nil {
 		tui.ShowWarning("Could not subscribe to events")
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -165,18 +172,18 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		tui.ShowError(fmt.Sprintf("Deploy view error: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 	}
 }
 
 func viewDeployments(client *api.Client, serverID, serverName string, site api.SiteResponse) {
-	clearScreen()
-	printHeader("launchctl", "Servers", serverName, "Sites", site.Address, "Deployments")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployments")
 
 	deployments, err := client.ListDeployments(serverID, site.ID)
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to list deployments: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -197,12 +204,12 @@ func viewDeployments(client *api.Client, serverID, serverName string, site api.S
 	}
 
 	output.RenderTable("Deployments", []string{"ID", "Status", "Commit", "Message", "Created"}, rows)
-	waitForEnter()
+	tui.WaitForEnter()
 }
 
 func createSite(client *api.Client, cfg *config.Config, serverID, serverName string) {
-	clearScreen()
-	printHeader("launchctl", "Servers", serverName, "Sites", "Create Site")
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", "Create Site")
 
 	var address, siteType, phpVersion, webFolder string
 	var zeroDowntime bool
@@ -251,7 +258,7 @@ func createSite(client *api.Client, cfg *config.Config, serverID, serverName str
 	})
 	if err != nil {
 		tui.ShowError(fmt.Sprintf("Failed to create site: %s", err))
-		waitForEnter()
+		tui.WaitForEnter()
 		return
 	}
 
@@ -260,7 +267,7 @@ func createSite(client *api.Client, cfg *config.Config, serverID, serverName str
 	fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
 	fmt.Println(tui.Label.Render("Address:") + tui.Value.Render(site.Address))
 	fmt.Println(tui.Label.Render("Status:") + tui.Value.Render(site.Status))
-	waitForEnter()
+	tui.WaitForEnter()
 }
 
 func truncate(s string, maxLen int) string {

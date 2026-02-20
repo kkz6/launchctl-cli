@@ -34,7 +34,7 @@ type Model struct {
 func NewModel(client *api.Client, teamName string) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(tui.Green)
+	s.Style = lipgloss.NewStyle().Foreground(tui.Indigo)
 
 	return Model{
 		client:   client,

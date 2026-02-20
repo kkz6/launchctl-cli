@@ -8,9 +8,9 @@ import (
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
-	Short: "Print the version of launchctl",
+	Short: "Print the version of lctl",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("launchctl %s\n", Version)
+		fmt.Printf("lctl %s\n", Version)
 	},
 }
 
