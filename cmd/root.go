@@ -5,12 +5,16 @@ import (
 	"os"
 	"time"
 
+	"github.com/kkz6/launchctl/cmd/cron"
+	"github.com/kkz6/launchctl/cmd/daemons"
 	"github.com/kkz6/launchctl/cmd/databases"
 	"github.com/kkz6/launchctl/cmd/deploy"
 	"github.com/kkz6/launchctl/cmd/env"
+	"github.com/kkz6/launchctl/cmd/firewall"
 	"github.com/kkz6/launchctl/cmd/servers"
 	"github.com/kkz6/launchctl/cmd/services"
 	"github.com/kkz6/launchctl/cmd/sites"
+	"github.com/kkz6/launchctl/cmd/ssl"
 	"github.com/kkz6/launchctl/cmd/sshkeys"
 	"github.com/kkz6/launchctl/cmd/teams"
 	"github.com/kkz6/launchctl/internal/api"
@@ -78,6 +82,10 @@ func init() {
 	rootCmd.AddCommand(services.ServicesCmd)
 	rootCmd.AddCommand(databases.DatabasesCmd)
 	rootCmd.AddCommand(sshkeys.SSHKeysCmd)
+	rootCmd.AddCommand(firewall.FirewallCmd)
+	rootCmd.AddCommand(cron.CronCmd)
+	rootCmd.AddCommand(ssl.SSLCmd)
+	rootCmd.AddCommand(daemons.DaemonsCmd)
 	rootCmd.AddCommand(logsCmd)
 	rootCmd.AddCommand(runCmd)
 }

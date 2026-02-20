@@ -103,10 +103,10 @@ func serverActions(client *api.Client, cfg *config.Config, server api.ServerResp
 
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Server: %s", server.Name),
-			[]string{"Show Details", "View Sites", "View Logs", "Services", "Databases", "Metrics", "Reboot", "SSH"},
+			[]string{"Show Details", "View Sites", "View Logs", "Services", "Databases", "Firewall", "Cron Jobs", "Daemons", "Metrics", "Reboot", "SSH"},
 			"Back",
 		)
-		if err != nil || choice == 8 {
+		if err != nil || choice == 11 {
 			return
 		}
 
@@ -122,10 +122,16 @@ func serverActions(client *api.Client, cfg *config.Config, server api.ServerResp
 		case 4:
 			viewDatabases(client, server.ID, server.Name)
 		case 5:
-			showServerMetrics(client, cfg, server)
+			viewFirewallRules(client, server.ID, server.Name)
 		case 6:
-			rebootServer(client, server)
+			viewCronJobs(client, server.ID, server.Name)
 		case 7:
+			viewDaemonsTUI(client, server.ID, server.Name)
+		case 8:
+			showServerMetrics(client, cfg, server)
+		case 9:
+			rebootServer(client, server)
+		case 10:
 			sshIntoServer(cfg, server)
 		}
 	}
@@ -471,4 +477,169 @@ func domainsMenu(client *api.Client, cfg *config.Config) {
 	}
 
 	sitesMenu(client, cfg, servers[choice].ID, servers[choice].Name)
+}
+
+func viewFirewallRules(client *api.Client, serverID, serverName string) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Firewall")
+
+	rules, err := client.ListFirewallRules(serverID)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to list firewall rules: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	if len(rules) == 0 {
+		tui.ShowInfo("No firewall rules found")
+		tui.WaitForEnter()
+		return
+	}
+
+	columns := []tui.TableColumn{
+		{Header: "Name", Width: 20},
+		{Header: "Action", Width: 10},
+		{Header: "Port", Width: 10},
+		{Header: "From IP", Width: 18},
+		{Header: "Status", Width: 16},
+	}
+
+	var rows []tui.TableRow
+	for _, r := range rules {
+		port := ""
+		if r.Port != nil {
+			port = *r.Port
+		}
+		fromIP := ""
+		if r.FromIPv4 != nil {
+			fromIP = *r.FromIPv4
+		}
+
+		status := "installed"
+		if r.HasFailed {
+			status = "failed"
+		} else if r.IsPending {
+			status = "pending"
+		} else if !r.IsInstalled {
+			status = "not installed"
+		}
+
+		rows = append(rows, tui.TableRow{
+			Columns: []string{r.Name, r.ActionLabel, port, fromIP, output.StatusDot(status)},
+		})
+	}
+
+	tui.SelectFromTable("Firewall Rules", columns, rows, "Back")
+}
+
+func viewCronJobs(client *api.Client, serverID, serverName string) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Cron Jobs")
+
+	crons, err := client.ListCrons(serverID)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to list cron jobs: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	if len(crons) == 0 {
+		tui.ShowInfo("No cron jobs found")
+		tui.WaitForEnter()
+		return
+	}
+
+	columns := []tui.TableColumn{
+		{Header: "User", Width: 12},
+		{Header: "Expression", Width: 16},
+		{Header: "Command", Width: 30},
+		{Header: "Installed", Width: 12},
+	}
+
+	var rows []tui.TableRow
+	for _, c := range crons {
+		installed := "No"
+		if c.IsInstalled {
+			installed = "Yes"
+		}
+		rows = append(rows, tui.TableRow{
+			Columns: []string{c.User, c.Expression, c.Command, installed},
+		})
+	}
+
+	tui.SelectFromTable("Cron Jobs", columns, rows, "Back")
+}
+
+func viewDaemonsTUI(client *api.Client, serverID, serverName string) {
+	for {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Daemons")
+
+		daemons, err := client.ListDaemons(serverID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to list daemons: %s", err))
+			tui.WaitForEnter()
+			return
+		}
+
+		if len(daemons) == 0 {
+			tui.ShowInfo("No daemons found")
+			tui.WaitForEnter()
+			return
+		}
+
+		columns := []tui.TableColumn{
+			{Header: "Command", Width: 30},
+			{Header: "User", Width: 12},
+			{Header: "Processes", Width: 10},
+			{Header: "Running", Width: 12},
+		}
+
+		var rows []tui.TableRow
+		for _, d := range daemons {
+			status := "stopped"
+			if d.Running {
+				status = "running"
+			}
+			rows = append(rows, tui.TableRow{
+				Columns: []string{d.Command, d.User, fmt.Sprintf("%d", d.Processes), output.StatusDot(status)},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select a daemon", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
+		}
+
+		daemonActionMenu(client, serverID, serverName, daemons[choice])
+	}
+}
+
+func daemonActionMenu(client *api.Client, serverID, serverName string, daemon api.DaemonResponse) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Daemons", daemon.Command)
+
+	status := "stopped"
+	if daemon.Running {
+		status = "running"
+	}
+
+	choice, err := tui.SelectFromList(
+		fmt.Sprintf("Daemon: %s (%s)", daemon.Command, output.StatusDot(status)),
+		[]string{"Restart"},
+		"Back",
+	)
+	if err != nil || choice == 1 {
+		return
+	}
+
+	err = client.RestartDaemon(serverID, daemon.ID)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to restart daemon: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	tui.ShowSuccess(fmt.Sprintf("Daemon %q restart initiated", daemon.Command))
+	tui.WaitForEnter()
 }

@@ -405,3 +405,99 @@ type AttachSSHKeyRequest struct {
 	SSHKeyID string `json:"ssh_key_id"`
 }
 
+// Firewall types
+
+type FirewallRuleResponse struct {
+	ID          string  `json:"id"`
+	ServerID    string  `json:"server_id"`
+	Name        string  `json:"name"`
+	Action      string  `json:"action"`
+	ActionLabel string  `json:"action_label"`
+	Port        *string `json:"port,omitempty"`
+	FromIPv4    *string `json:"from_ipv4,omitempty"`
+	Mask        *string `json:"mask,omitempty"`
+	Note        *string `json:"note,omitempty"`
+	IsInstalled bool    `json:"is_installed"`
+	IsPending   bool    `json:"is_pending"`
+	HasFailed   bool    `json:"has_failed"`
+	InstalledAt *string `json:"installed_at,omitempty"`
+	UfwRule     string  `json:"ufw_rule"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+type CreateFirewallRuleRequest struct {
+	Name     string  `json:"name"`
+	Action   string  `json:"action"`
+	Port     string  `json:"port"`
+	FromIPv4 *string `json:"from_ipv4,omitempty"`
+	Mask     *string `json:"mask,omitempty"`
+	Note     *string `json:"note,omitempty"`
+}
+
+// Cron types
+
+type CronResponse struct {
+	ID          string  `json:"id"`
+	ServerID    string  `json:"server_id"`
+	SiteID      *string `json:"site_id,omitempty"`
+	User        string  `json:"user"`
+	Expression  string  `json:"expression"`
+	Command     string  `json:"command"`
+	Frequency   *string `json:"frequency,omitempty"`
+	Hidden      bool    `json:"hidden"`
+	IsInstalled bool    `json:"is_installed"`
+	Path        string  `json:"path"`
+	InstalledAt *string `json:"installed_at,omitempty"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+type CreateCronRequest struct {
+	User       string  `json:"user,omitempty"`
+	Expression string  `json:"expression"`
+	Command    string  `json:"command"`
+	Frequency  *string `json:"frequency,omitempty"`
+	SiteID     *string `json:"site_id,omitempty"`
+}
+
+// SSL/Certificate types
+
+type CertificateResponse struct {
+	ID         string   `json:"id"`
+	SiteID     string   `json:"site_id"`
+	Type       string   `json:"type"`
+	Domains    []string `json:"domains,omitempty"`
+	IsActive   bool     `json:"is_active"`
+	UploadedAt *string  `json:"uploaded_at,omitempty"`
+	CreatedAt  string   `json:"created_at"`
+}
+
+// Daemon types
+
+type DaemonResponse struct {
+	ID              string  `json:"id"`
+	ServerID        string  `json:"server_id"`
+	User            string  `json:"user"`
+	Directory       *string `json:"directory,omitempty"`
+	Command         string  `json:"command"`
+	Processes       int     `json:"processes"`
+	StopWaitSeconds int     `json:"stop_wait_seconds"`
+	StopSignal      *string `json:"stop_signal,omitempty"`
+	IsInstalled     bool    `json:"is_installed"`
+	Running         bool    `json:"running"`
+	Path            string  `json:"path"`
+	InstalledAt     *string `json:"installed_at,omitempty"`
+	CreatedAt       string  `json:"created_at"`
+	UpdatedAt       string  `json:"updated_at"`
+}
+
+type CreateDaemonRequest struct {
+	User            string  `json:"user,omitempty"`
+	Directory       *string `json:"directory,omitempty"`
+	Command         string  `json:"command"`
+	Processes       int     `json:"processes,omitempty"`
+	StopWaitSeconds int     `json:"stop_wait_seconds,omitempty"`
+	StopSignal      *string `json:"stop_signal,omitempty"`
+}
+
