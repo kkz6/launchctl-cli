@@ -7,9 +7,11 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/notify"
 	"github.com/kkz6/launchctl/internal/output"
 	"github.com/kkz6/launchctl/internal/tui"
 	deploytui "github.com/kkz6/launchctl/internal/tui/deploy"
+	"github.com/kkz6/launchctl/internal/tui/logview"
 )
 
 func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName string) {
@@ -26,37 +28,31 @@ func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName stri
 
 		if len(sites) == 0 {
 			tui.ShowInfo("No sites found on this server")
-		} else {
-			var rows [][]string
-			for _, s := range sites {
-				deployStatus := ""
-				if s.LatestDeployment != nil {
-					deployStatus = s.LatestDeployment.Status
-				}
-				rows = append(rows, []string{
-					s.ID,
-					s.Address,
-					s.Type,
-					output.StatusDot(s.Status),
-					deployStatus,
-				})
-			}
-			output.RenderTable("Sites", []string{"ID", "Address", "Type", "Status", "Last Deploy"}, rows)
-		}
-
-		options := make([]string, 0, len(sites))
-		for _, s := range sites {
-			options = append(options, s.Address)
-		}
-
-		choice, err := tui.SelectFromList("Select a site", options, "Create Site", "Back")
-		if err != nil || choice == len(options)+1 {
+			tui.WaitForEnter()
 			return
 		}
 
-		if choice == len(options) {
-			createSite(client, cfg, serverID, serverName)
-			continue
+		columns := []tui.TableColumn{
+			{Header: "Address", Width: 24},
+			{Header: "Type", Width: 10},
+			{Header: "Status", Width: 16},
+			{Header: "Last Deploy", Width: 12},
+		}
+
+		var rows []tui.TableRow
+		for _, s := range sites {
+			deployStatus := ""
+			if s.LatestDeployment != nil {
+				deployStatus = s.LatestDeployment.Status
+			}
+			rows = append(rows, tui.TableRow{
+				Columns: []string{s.Address, s.Type, output.StatusDot(s.Status), deployStatus},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select a site", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
 		}
 
 		siteActions(client, cfg, serverID, serverName, sites[choice])
@@ -68,12 +64,17 @@ func siteActions(client *api.Client, cfg *config.Config, serverID, serverName st
 		tui.ClearScreen()
 		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address)
 
+		favLabel := "★ Add to Favorites"
+		if cfg.IsFavorite(site.ID) {
+			favLabel = "☆ Remove from Favorites"
+		}
+
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Site: %s", site.Address),
-			[]string{"Show Details", "Deploy", "View Deployments"},
+			[]string{"Show Details", "Deploy", "View Deployments", favLabel},
 			"Back",
 		)
-		if err != nil || choice == 3 {
+		if err != nil || choice == 4 {
 			return
 		}
 
@@ -83,7 +84,20 @@ func siteActions(client *api.Client, cfg *config.Config, serverID, serverName st
 		case 1:
 			deploySite(client, cfg, serverID, serverName, site)
 		case 2:
-			viewDeployments(client, serverID, serverName, site)
+			viewDeployments(client, cfg, serverID, serverName, site)
+		case 3:
+			if cfg.IsFavorite(site.ID) {
+				cfg.RemoveFavorite(site.ID)
+				notify.Success(fmt.Sprintf("Removed %s from favorites", site.Address))
+			} else {
+				cfg.AddFavorite(config.Favorite{
+					ServerID:    serverID,
+					ServerName:  serverName,
+					SiteID:      site.ID,
+					SiteAddress: site.Address,
+				})
+				notify.Success(fmt.Sprintf("Added %s to favorites", site.Address))
+			}
 		}
 	}
 }
@@ -161,14 +175,23 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 	}
 	defer ws.Close()
 
-	channel := fmt.Sprintf("team:%s", cfg.TeamID)
-	if err := ws.Subscribe(channel); err != nil {
+	teamChannel := fmt.Sprintf("team:%s", cfg.TeamID)
+	if err := ws.Subscribe(teamChannel); err != nil {
 		tui.ShowWarning("Could not subscribe to events")
 		tui.WaitForEnter()
 		return
 	}
 
-	model := deploytui.NewModel(site.Address, ws, channel)
+	model := deploytui.NewModel(deploytui.Opts{
+		SiteName:     site.Address,
+		ServerID:     serverID,
+		SiteID:       site.ID,
+		DeploymentID: deployment.ID,
+		Client:       client,
+		JWT:          jwt,
+		TeamID:       cfg.TeamID,
+		WS:           ws,
+	})
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		tui.ShowError(fmt.Sprintf("Deploy view error: %s", err))
@@ -176,98 +199,99 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 	}
 }
 
-func viewDeployments(client *api.Client, serverID, serverName string, site api.SiteResponse) {
-	tui.ClearScreen()
-	tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployments")
+func viewDeployments(client *api.Client, cfg *config.Config, serverID, serverName string, site api.SiteResponse) {
+	for {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployments")
 
-	deployments, err := client.ListDeployments(serverID, site.ID)
-	if err != nil {
-		tui.ShowError(fmt.Sprintf("Failed to list deployments: %s", err))
-		tui.WaitForEnter()
-		return
-	}
-
-	var rows [][]string
-	for _, d := range deployments {
-		commit := d.ShortGitHash
-		message := ""
-		if d.CommitData != nil {
-			message = truncate(d.CommitData.Message, 40)
+		deployments, err := client.ListDeployments(serverID, site.ID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to list deployments: %s", err))
+			tui.WaitForEnter()
+			return
 		}
-		rows = append(rows, []string{
-			d.ID,
-			output.StatusDot(d.Status),
-			commit,
-			message,
-			d.CreatedAt,
-		})
-	}
 
-	output.RenderTable("Deployments", []string{"ID", "Status", "Commit", "Message", "Created"}, rows)
-	tui.WaitForEnter()
+		if len(deployments) == 0 {
+			tui.ShowInfo("No deployments found")
+			tui.WaitForEnter()
+			return
+		}
+
+		columns := []tui.TableColumn{
+			{Header: "Status", Width: 16},
+			{Header: "Commit", Width: 10},
+			{Header: "Message", Width: 32},
+			{Header: "Created", Width: 20},
+		}
+
+		var rows []tui.TableRow
+		for _, d := range deployments {
+			message := ""
+			if d.CommitData != nil {
+				message = truncate(d.CommitData.Message, 30)
+			}
+			rows = append(rows, tui.TableRow{
+				Columns: []string{output.StatusDot(d.Status), d.ShortGitHash, message, d.CreatedAt},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select deployment to view logs", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
+		}
+
+		viewDeploymentLogs(client, cfg, serverID, serverName, site, deployments[choice])
+	}
 }
 
-func createSite(client *api.Client, cfg *config.Config, serverID, serverName string) {
-	tui.ClearScreen()
-	tui.PrintHeader("lctl", "Servers", serverName, "Sites", "Create Site")
-
-	var address, siteType, phpVersion, webFolder string
-	var zeroDowntime bool
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Domain / Address").
-				Placeholder("example.com").
-				Value(&address),
-			huh.NewSelect[string]().
-				Title("Site Type").
-				Options(
-					huh.NewOption("PHP", "php"),
-					huh.NewOption("Static / HTML", "static"),
-					huh.NewOption("Node.js", "node"),
-					huh.NewOption("Proxy", "proxy"),
-				).
-				Value(&siteType),
-			huh.NewInput().
-				Title("PHP Version").
-				Placeholder("8.2").
-				Value(&phpVersion),
-			huh.NewInput().
-				Title("Web Folder").
-				Placeholder("public").
-				Value(&webFolder),
-			huh.NewConfirm().
-				Title("Zero Downtime Deployment?").
-				Value(&zeroDowntime),
-		),
-	).
-		WithTheme(tui.FormTheme()).
-		WithWidth(60)
-
-	if err := form.Run(); err != nil {
-		return
-	}
-
-	site, err := client.CreateSite(serverID, api.CreateSiteRequest{
-		Address:      address,
-		Type:         siteType,
-		PHPVersion:   phpVersion,
-		WebFolder:    webFolder,
-		ZeroDowntime: zeroDowntime,
-	})
-	if err != nil {
-		tui.ShowError(fmt.Sprintf("Failed to create site: %s", err))
+func viewDeploymentLogs(client *api.Client, cfg *config.Config, serverID, serverName string, site api.SiteResponse, deployment api.DeploymentResponse) {
+	if deployment.TaskID == nil {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployment")
+		tui.ShowInfo("No task output available for this deployment")
 		tui.WaitForEnter()
 		return
 	}
 
-	fmt.Println()
-	tui.ShowSuccess("Site created successfully")
-	fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
-	fmt.Println(tui.Label.Render("Address:") + tui.Value.Render(site.Address))
-	fmt.Println(tui.Label.Render("Status:") + tui.Value.Render(site.Status))
-	tui.WaitForEnter()
+	jwt, err := client.ExchangeToken()
+	if err != nil {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployment")
+		tui.ShowError(fmt.Sprintf("Failed to authenticate: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	ws, err := api.NewLogsWSClient(cfg, jwt, serverID, "task", *deployment.TaskID)
+	if err != nil {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", site.Address, "Deployment")
+		tui.ShowError(fmt.Sprintf("Failed to connect to log stream: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+	defer ws.Close()
+
+	info := logview.Info{
+		Title:  fmt.Sprintf("Deployment: %s", site.Address),
+		Status: deployment.Status,
+		Commit: deployment.ShortGitHash,
+	}
+
+	info.Lines = append(info.Lines, struct{ Label, Value string }{"Commit", deployment.ShortGitHash})
+	if deployment.CommitData != nil && deployment.CommitData.Message != "" {
+		msg := deployment.CommitData.Message
+		if len(msg) > 60 {
+			msg = msg[:57] + "..."
+		}
+		info.Lines = append(info.Lines, struct{ Label, Value string }{"Message", msg})
+	}
+	info.Lines = append(info.Lines, struct{ Label, Value string }{"Created", deployment.CreatedAt})
+
+	if err := logview.Run(info, ws); err != nil {
+		tui.ShowError(fmt.Sprintf("Log viewer error: %s", err))
+		tui.WaitForEnter()
+	}
 }
 
 func truncate(s string, maxLen int) string {

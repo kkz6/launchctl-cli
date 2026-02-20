@@ -80,3 +80,116 @@ func (c *WSClient) ReadMessage() (*WSMessage, error) {
 func (c *WSClient) Close() error {
 	return c.conn.Close()
 }
+
+type MetricsWSClient struct {
+	conn *websocket.Conn
+}
+
+func NewMetricsWSClient(cfg *config.Config, token, serverID string) (*MetricsWSClient, error) {
+	baseURL := config.APIURL
+	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
+	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
+
+	u, err := url.Parse(baseURL + "/api/metrics/stream")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse websocket URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("token", token)
+	q.Set("team_id", cfg.TeamID)
+	q.Set("serverId", serverID)
+	q.Set("interval", "2")
+	u.RawQuery = q.Encode()
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to metrics stream: %w", err)
+	}
+
+	return &MetricsWSClient{conn: conn}, nil
+}
+
+func (c *MetricsWSClient) ReadRaw() ([]byte, error) {
+	_, data, err := c.conn.ReadMessage()
+	if err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}
+
+func (c *MetricsWSClient) Close() error {
+	return c.conn.Close()
+}
+
+type LogsWSClient struct {
+	conn *websocket.Conn
+}
+
+func NewLogsWSClient(cfg *config.Config, token, serverID, entity, entityID string) (*LogsWSClient, error) {
+	baseURL := config.APIURL
+	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
+	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
+
+	u, err := url.Parse(baseURL + "/api/terminal/logs")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse websocket URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("token", token)
+	q.Set("team_id", cfg.TeamID)
+	q.Set("serverId", serverID)
+	q.Set("entity", entity)
+	q.Set("entityId", entityID)
+	q.Set("tail", "500")
+	u.RawQuery = q.Encode()
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to log stream: %w", err)
+	}
+
+	return &LogsWSClient{conn: conn}, nil
+}
+
+func (c *LogsWSClient) ReadMessage() (string, error) {
+	_, data, err := c.conn.ReadMessage()
+	if err != nil {
+		return "", err
+	}
+
+	return string(data), nil
+}
+
+func NewLogsWSClientDirect(token, teamID, serverID, entity, entityID string) (*LogsWSClient, error) {
+	baseURL := config.APIURL
+	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
+	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
+
+	u, err := url.Parse(baseURL + "/api/terminal/logs")
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse websocket URL: %w", err)
+	}
+
+	q := u.Query()
+	q.Set("token", token)
+	q.Set("team_id", teamID)
+	q.Set("serverId", serverID)
+	q.Set("entity", entity)
+	q.Set("entityId", entityID)
+	q.Set("tail", "500")
+	u.RawQuery = q.Encode()
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to log stream: %w", err)
+	}
+
+	return &LogsWSClient{conn: conn}, nil
+}
+
+func (c *LogsWSClient) Close() error {
+	return c.conn.Close()
+}

@@ -6,6 +6,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kkz6/launchctl/internal/notify"
 )
 
 var (
@@ -23,7 +24,6 @@ func ClearScreen() {
 func PrintHeader(parts ...string) {
 	fmt.Println()
 	var b strings.Builder
-	b.WriteString("  ")
 	for i, p := range parts {
 		if i > 0 {
 			b.WriteString(breadcrumbSep)
@@ -36,6 +36,11 @@ func PrintHeader(parts ...string) {
 	}
 	fmt.Println(b.String())
 	PrintDivider()
+
+	if bar := notify.Render(); bar != "" {
+		fmt.Println(bar)
+	}
+
 	fmt.Println()
 }
 
@@ -49,7 +54,7 @@ func (m waitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 func (m waitModel) View() string {
-	return "\n" + promptStyle.Render("  Press Enter to continue...")
+	return "\n" + promptStyle.Render("Press Enter to continue...")
 }
 
 func WaitForEnter() {
@@ -57,9 +62,9 @@ func WaitForEnter() {
 }
 
 func PrintDivider() {
-	fmt.Println("  " + dividerStyle.Render(strings.Repeat("─", 50)))
+	fmt.Println(dividerStyle.Render(strings.Repeat("─", 50)))
 }
 
 func PrintHint(text string) {
-	fmt.Println(promptStyle.Render("  " + text))
+	fmt.Println(promptStyle.Render(text))
 }

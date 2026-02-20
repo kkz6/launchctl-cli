@@ -64,14 +64,14 @@ var logsCmd = &cobra.Command{
 				return fmt.Errorf("failed to authenticate for live logs: %w", err)
 			}
 
-			return streamLiveLogs(cfg, jwt, site, deployment)
+			return streamLiveLogs(client, cfg, jwt, site, deployment)
 		}
 
 		return showStoredLogs(client, logsServerFlag, deployment)
 	},
 }
 
-func streamLiveLogs(cfg *config.Config, token string, site *api.SiteResponse, deployment *api.DeploymentResponse) error {
+func streamLiveLogs(client *api.Client, cfg *config.Config, token string, site *api.SiteResponse, deployment *api.DeploymentResponse) error {
 	ws, err := api.NewWSClient(cfg, token)
 	if err != nil {
 		return fmt.Errorf("failed to connect to live logs: %w", err)
@@ -83,7 +83,16 @@ func streamLiveLogs(cfg *config.Config, token string, site *api.SiteResponse, de
 		return fmt.Errorf("failed to subscribe to events: %w", err)
 	}
 
-	model := deploytui.NewModel(site.Address, ws, channel)
+	model := deploytui.NewModel(deploytui.Opts{
+		SiteName:     site.Address,
+		ServerID:     logsServerFlag,
+		SiteID:       site.ID,
+		DeploymentID: deployment.ID,
+		Client:       client,
+		JWT:          token,
+		TeamID:       cfg.TeamID,
+		WS:           ws,
+	})
 	p := tea.NewProgram(model, tea.WithAltScreen())
 	if _, err := p.Run(); err != nil {
 		return err

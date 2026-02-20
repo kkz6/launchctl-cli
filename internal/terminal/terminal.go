@@ -1,6 +1,7 @@
 package terminal
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,10 +25,12 @@ type resizeMessage struct {
 }
 
 type Options struct {
-	ServerID string
-	SiteID   string
-	Username string
-	Token    string
+	ServerID   string
+	SiteID     string
+	Username   string
+	Token      string
+	ServerName string
+	ServerIP   string
 }
 
 func Connect(cfg *config.Config, opts Options) error {
@@ -36,19 +39,36 @@ func Connect(cfg *config.Config, opts Options) error {
 		return fmt.Errorf("failed to build terminal URL: %w", err)
 	}
 
+	cols, rows, _ := getTerminalSize()
+
+	frame := newFrame(opts.ServerName, opts.ServerIP, opts.Username)
+	frame.draw(cols, rows)
+	setupScrollRegion(frame.headerRows, frame.footerRows, rows)
+
 	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
+		resetScrollRegion()
 		return fmt.Errorf("failed to connect to terminal: %w", err)
 	}
-	defer conn.Close()
+
+	enableMouseTracking()
 
 	oldState, err := makeRaw(os.Stdin.Fd())
 	if err != nil {
+		disableMouseTracking()
+		resetScrollRegion()
+		conn.Close()
 		return fmt.Errorf("failed to set terminal to raw mode: %w", err)
 	}
-	defer restore(os.Stdin.Fd(), oldState)
 
-	if err := sendResize(conn); err != nil {
+	adjustedRows := rows - frame.headerRows - frame.footerRows
+	if adjustedRows < 1 {
+		adjustedRows = 1
+	}
+	if err := sendResizeWithSize(conn, cols, adjustedRows); err != nil {
+		restore(os.Stdin.Fd(), oldState)
+		resetScrollRegion()
+		conn.Close()
 		return fmt.Errorf("failed to send initial resize: %w", err)
 	}
 
@@ -56,9 +76,9 @@ func Connect(cfg *config.Config, opts Options) error {
 	var once sync.Once
 	closeDone := func() { once.Do(func() { close(done) }) }
 
-	go handleOutput(conn, os.Stdout, closeDone)
+	go handleOutput(conn, os.Stdout, closeDone, frame)
 	go handleInput(conn, os.Stdin, closeDone)
-	go handleResize(conn, done)
+	go handleResizeWithFrame(conn, done, frame)
 	go keepAlive(conn, done)
 
 	sigCh := make(chan os.Signal, 1)
@@ -70,8 +90,17 @@ func Connect(cfg *config.Config, opts Options) error {
 		closeDone()
 	}
 
+	signal.Stop(sigCh)
+
 	conn.WriteMessage(websocket.CloseMessage,
 		websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	time.Sleep(150 * time.Millisecond)
+	conn.Close()
+
+	restore(os.Stdin.Fd(), oldState)
+	disableMouseTracking()
+	resetScrollRegion()
 
 	return nil
 }
@@ -106,7 +135,7 @@ func buildURL(cfg *config.Config, opts Options) (string, error) {
 	return u.String(), nil
 }
 
-func handleOutput(conn *websocket.Conn, w io.Writer, closeDone func()) {
+func handleOutput(conn *websocket.Conn, w io.Writer, closeDone func(), f *frame) {
 	defer closeDone()
 
 	for {
@@ -115,7 +144,30 @@ func handleOutput(conn *websocket.Conn, w io.Writer, closeDone func()) {
 			return
 		}
 
+		// Data arrived — session is alive, clear any pending deadline
+		conn.SetReadDeadline(time.Time{})
+
+		_, rows, _ := getTerminalSize()
+		regionTop := []byte(fmt.Sprintf("\033[%d;1H", f.headerRows+1))
+		regionClear := []byte(f.regionClearSeq())
+		scrollRegion := []byte(f.scrollRegionSeq(rows))
+
+		// Filter sequences that break the frame
+		message = bytes.ReplaceAll(message, []byte{0x1b, 'c'}, regionClear)
+		message = bytes.ReplaceAll(message, []byte("\033[r"), scrollRegion)
+		message = bytes.ReplaceAll(message, []byte("\033[2J"), regionClear)
+		message = bytes.ReplaceAll(message, []byte("\033[3J"), nil)
+		message = bytes.ReplaceAll(message, []byte("\033[H"), regionTop)
+
 		w.Write(message)
+
+		// Redraw footer in case clear sequences wiped it
+		f.ensureFooter()
+
+		// Detect shell exit — "logout" appears when bash/zsh session ends
+		if bytes.Contains(message, []byte("logout")) {
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+		}
 	}
 }
 
@@ -132,10 +184,20 @@ func handleInput(conn *websocket.Conn, r io.Reader, closeDone func()) {
 		if err := conn.WriteMessage(websocket.TextMessage, buf[:n]); err != nil {
 			return
 		}
+
+		// Detect Ctrl+D (EOF signal) — the user intends to disconnect.
+		// Set a delayed read deadline so handleOutput's ReadMessage unblocks
+		// if the server stops sending data after the shell exits.
+		if bytes.IndexByte(buf[:n], 0x04) >= 0 {
+			go func() {
+				time.Sleep(3 * time.Second)
+				conn.SetReadDeadline(time.Now().Add(1 * time.Second))
+			}()
+		}
 	}
 }
 
-func handleResize(conn *websocket.Conn, done <-chan struct{}) {
+func handleResizeWithFrame(conn *websocket.Conn, done <-chan struct{}, f *frame) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGWINCH)
 	defer signal.Stop(sigCh)
@@ -145,17 +207,24 @@ func handleResize(conn *websocket.Conn, done <-chan struct{}) {
 		case <-done:
 			return
 		case <-sigCh:
-			sendResize(conn)
+			cols, rows, err := getTerminalSize()
+			if err != nil {
+				continue
+			}
+
+			f.redraw(cols, rows)
+			setupScrollRegion(f.headerRows, f.footerRows, rows)
+
+			adjustedRows := rows - f.headerRows - f.footerRows
+			if adjustedRows < 1 {
+				adjustedRows = 1
+			}
+			sendResizeWithSize(conn, cols, adjustedRows)
 		}
 	}
 }
 
-func sendResize(conn *websocket.Conn) error {
-	cols, rows, err := getTerminalSize()
-	if err != nil {
-		return err
-	}
-
+func sendResizeWithSize(conn *websocket.Conn, cols, rows int) error {
 	msg := resizeMessage{
 		Type: "resize",
 		Cols: cols,

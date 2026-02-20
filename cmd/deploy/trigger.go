@@ -57,7 +57,16 @@ var triggerCmd = &cobra.Command{
 			return nil
 		}
 
-		model := deploytui.NewModel(site.Address, ws, channel)
+		model := deploytui.NewModel(deploytui.Opts{
+			SiteName:     site.Address,
+			ServerID:     triggerServerFlag,
+			SiteID:       siteID,
+			DeploymentID: deployment.ID,
+			Client:       client,
+			JWT:          jwt,
+			TeamID:       cfg.TeamID,
+			WS:           ws,
+		})
 		p := tea.NewProgram(model, tea.WithAltScreen())
 		if _, err := p.Run(); err != nil {
 			return err

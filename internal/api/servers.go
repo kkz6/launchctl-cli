@@ -71,6 +71,20 @@ func (c *Client) RebootServer(id string) error {
 	return nil
 }
 
+func (c *Client) GetTask(serverID, taskID string) (*TaskResponse, error) {
+	resp, err := c.doRequest(http.MethodGet, fmt.Sprintf("/api/servers/%s/tasks/%s", serverID, taskID), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := decodeResponse[TaskResponse](resp)
+	if err != nil {
+		return nil, err
+	}
+
+	return &result.Data, nil
+}
+
 func (c *Client) GetServerMetrics(id string) (*MetricResponse, error) {
 	resp, err := c.doRequest(http.MethodGet, fmt.Sprintf("/api/servers/%s/metrics/latest", id), nil)
 	if err != nil {

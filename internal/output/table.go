@@ -44,7 +44,7 @@ func RenderTable(title string, headers []string, rows [][]string) {
 
 	fmt.Println(t)
 
-	fmt.Println(tui.Dim.Render(fmt.Sprintf("  %d items", len(rows))))
+	fmt.Println(tui.Dim.Render(fmt.Sprintf("%d items", len(rows))))
 	fmt.Println()
 }
 

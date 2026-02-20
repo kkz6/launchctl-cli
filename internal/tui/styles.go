@@ -50,8 +50,7 @@ var (
 
 	Label = lipgloss.NewStyle().
 		Foreground(Slate).
-		PaddingLeft(2).
-		Width(20)
+		Width(18)
 
 	Value = lipgloss.NewStyle().
 		Foreground(White)
@@ -84,22 +83,22 @@ func StatusStyle(status string) lipgloss.Style {
 
 // ShowSuccess displays a success message
 func ShowSuccess(message string) {
-	fmt.Println("  " + Success.Render("\u2713 "+message))
+	fmt.Println(Success.Render("\u2713 " + message))
 }
 
 // ShowError displays an error message
 func ShowError(message string) {
-	fmt.Println("  " + Error.Render("\u2717 "+message))
+	fmt.Println(Error.Render("\u2717 " + message))
 }
 
 // ShowWarning displays a warning message
 func ShowWarning(message string) {
-	fmt.Println("  " + Warning.Render("\u26a0 "+message))
+	fmt.Println(Warning.Render("\u26a0 " + message))
 }
 
 // ShowInfo displays an info message
 func ShowInfo(message string) {
-	fmt.Println("  " + Info.Render("\u25b8 "+message))
+	fmt.Println(Info.Render("\u25b8 " + message))
 }
 
 // CreateBox creates a styled box around content

@@ -14,13 +14,21 @@ const (
 
 const APIURL = "https://launchctl.io"
 
+type Favorite struct {
+	ServerID   string `json:"server_id"`
+	ServerName string `json:"server_name"`
+	SiteID     string `json:"site_id"`
+	SiteAddress string `json:"site_address"`
+}
+
 type Config struct {
-	AccessToken string `json:"access_token,omitempty"`
-	TeamID      string `json:"team_id,omitempty"`
-	TeamName    string `json:"team_name,omitempty"`
-	UserID      string `json:"user_id,omitempty"`
-	UserName    string `json:"user_name,omitempty"`
-	UserEmail   string `json:"user_email,omitempty"`
+	AccessToken string     `json:"access_token,omitempty"`
+	TeamID      string     `json:"team_id,omitempty"`
+	TeamName    string     `json:"team_name,omitempty"`
+	UserID      string     `json:"user_id,omitempty"`
+	UserName    string     `json:"user_name,omitempty"`
+	UserEmail   string     `json:"user_email,omitempty"`
+	Favorites   []Favorite `json:"favorites,omitempty"`
 }
 
 func DefaultConfig() *Config {
@@ -124,4 +132,33 @@ func (c *Config) Set(key, value string) error {
 	}
 
 	return c.Save()
+}
+
+func (c *Config) AddFavorite(fav Favorite) error {
+	for _, f := range c.Favorites {
+		if f.SiteID == fav.SiteID {
+			return nil
+		}
+	}
+	c.Favorites = append(c.Favorites, fav)
+	return c.Save()
+}
+
+func (c *Config) RemoveFavorite(siteID string) error {
+	for i, f := range c.Favorites {
+		if f.SiteID == siteID {
+			c.Favorites = append(c.Favorites[:i], c.Favorites[i+1:]...)
+			return c.Save()
+		}
+	}
+	return nil
+}
+
+func (c *Config) IsFavorite(siteID string) bool {
+	for _, f := range c.Favorites {
+		if f.SiteID == siteID {
+			return true
+		}
+	}
+	return false
 }

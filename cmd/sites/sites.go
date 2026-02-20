@@ -13,5 +13,4 @@ var SitesCmd = &cobra.Command{
 func init() {
 	SitesCmd.AddCommand(listCmd)
 	SitesCmd.AddCommand(showCmd)
-	SitesCmd.AddCommand(createCmd)
 }

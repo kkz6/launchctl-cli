@@ -3,20 +3,21 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kkz6/launchctl/internal/notify"
 )
 
 var (
 	itemNormalStyle = lipgloss.NewStyle().
-			PaddingLeft(4).
+			PaddingLeft(2).
 			Foreground(Slate)
 
 	itemSelectedStyle = lipgloss.NewStyle().
-				PaddingLeft(2).
 				Foreground(Indigo).
 				Bold(true)
 
@@ -27,12 +28,18 @@ var (
 				Foreground(Indigo)
 
 	actionNormalStyle = lipgloss.NewStyle().
-				PaddingLeft(4).
+				PaddingLeft(2).
 				Foreground(DarkSlate)
 
 	actionSelectedStyle = lipgloss.NewStyle().
-				PaddingLeft(2).
 				Foreground(Slate).
+				Bold(true)
+
+	tableColNormal = lipgloss.NewStyle().
+			Foreground(Slate)
+
+	tableColSelected = lipgloss.NewStyle().
+				Foreground(Indigo).
 				Bold(true)
 )
 
@@ -52,6 +59,16 @@ func (s separatorItem) Title() string       { return "" }
 func (s separatorItem) Description() string { return "" }
 func (s separatorItem) FilterValue() string { return "" }
 
+type tableItem struct {
+	columns []string
+	widths  []int
+	index   int
+}
+
+func (t tableItem) Title() string       { return t.columns[0] }
+func (t tableItem) Description() string { return "" }
+func (t tableItem) FilterValue() string { return t.columns[0] }
+
 type simpleDelegate struct{}
 
 func (d simpleDelegate) Height() int                             { return 1 }
@@ -59,6 +76,11 @@ func (d simpleDelegate) Spacing() int                            { return 0 }
 func (d simpleDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd { return nil }
 func (d simpleDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	if _, isSep := listItem.(separatorItem); isSep {
+		return
+	}
+
+	if ti, ok := listItem.(tableItem); ok {
+		renderTableRow(w, m, index, ti)
 		return
 	}
 
@@ -85,11 +107,49 @@ func (d simpleDelegate) Render(w io.Writer, m list.Model, index int, listItem li
 	}
 }
 
+func renderTableRow(w io.Writer, m list.Model, index int, ti tableItem) {
+	selected := index == m.Index()
+
+	var row strings.Builder
+	if selected {
+		row.WriteString("▸ ")
+		numStr := tableColSelected.Render(fmt.Sprintf("%d.", ti.index+1))
+		row.WriteString(numStr)
+		row.WriteString(" ")
+	} else {
+		row.WriteString("  ")
+		numStr := itemNumberStyle.Render(fmt.Sprintf("%d.", ti.index+1))
+		row.WriteString(numStr)
+		row.WriteString(" ")
+	}
+
+	for col, val := range ti.columns {
+		w := ti.widths[col]
+		cell := val
+		if len(cell) > w {
+			cell = cell[:w-1] + "…"
+		}
+		padded := cell + strings.Repeat(" ", max(0, w-lipgloss.Width(cell)))
+		if selected {
+			row.WriteString(tableColSelected.Render(padded))
+		} else {
+			row.WriteString(tableColNormal.Render(padded))
+		}
+		if col < len(ti.columns)-1 {
+			row.WriteString("  ")
+		}
+	}
+
+	fmt.Fprint(w, row.String())
+}
+
 type selectionModel struct {
-	list     list.Model
-	choice   int
-	quitting bool
-	title    string
+	list       list.Model
+	choice     int
+	quitting   bool
+	title      string
+	termHeight int
+	termWidth  int
 }
 
 func (m selectionModel) Init() tea.Cmd {
@@ -101,6 +161,8 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		m.termHeight = msg.Height
+		m.termWidth = msg.Width
 		m.list.SetWidth(msg.Width)
 		return m, nil
 
@@ -115,13 +177,26 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if i, ok := m.list.SelectedItem().(simpleItem); ok {
 				m.choice = i.index
 			}
+			if i, ok := m.list.SelectedItem().(tableItem); ok {
+				m.choice = i.index
+			}
 			return m, tea.Quit
 
 		case "1", "2", "3", "4", "5", "6", "7", "8", "9":
 			num := int(keypress[0] - '0')
 			count := 0
 			for idx, item := range m.list.Items() {
-				if si, ok := item.(simpleItem); ok {
+				switch si := item.(type) {
+				case simpleItem:
+					if !si.isAction {
+						count++
+						if count == num {
+							m.list.Select(idx)
+							m.choice = si.index
+							return m, tea.Quit
+						}
+					}
+				case tableItem:
 					count++
 					if count == num {
 						m.list.Select(idx)
@@ -158,15 +233,44 @@ func (m selectionModel) View() string {
 		Bold(true).
 		MarginBottom(1)
 
-	view := titleStyle.Render(m.title) + "\n"
-	view += m.list.View()
-
 	helpStyle := lipgloss.NewStyle().
-		Foreground(Muted).
-		MarginTop(1)
-	view += "\n" + helpStyle.Render("↑/k up • ↓/j down • 1-9 quick select • enter select • esc cancel")
+		Foreground(Muted)
 
-	return lipgloss.NewStyle().Margin(1, 0).PaddingLeft(2).Render(view)
+	helpText := helpStyle.Render("↑/k up • ↓/j down • 1-9 quick select • enter select • esc cancel")
+
+	notifyBar := notify.Render()
+
+	content := titleStyle.Render(m.title) + "\n"
+	content += m.list.View()
+
+	contentLines := strings.Count(content, "\n") + 1
+
+	footerLines := 1
+	if notifyBar != "" {
+		footerLines = 2
+	}
+
+	// +2 for top margin
+	usedLines := contentLines + footerLines + 2
+
+	padding := 0
+	if m.termHeight > 0 && m.termHeight > usedLines {
+		padding = m.termHeight - usedLines
+	}
+
+	var view strings.Builder
+	view.WriteString(content)
+
+	if padding > 0 {
+		view.WriteString(strings.Repeat("\n", padding))
+	}
+
+	if notifyBar != "" {
+		view.WriteString("\n" + notifyBar)
+	}
+	view.WriteString("\n" + helpText)
+
+	return lipgloss.NewStyle().Margin(1, 0).Render(view.String())
 }
 
 // SelectFromList allows selecting from a list using arrow keys.
@@ -225,6 +329,96 @@ func SelectFromList(title string, options []string, actions ...string) (int, err
 			return -1, fmt.Errorf("cancelled")
 		}
 		return m.choice, nil
+	}
+
+	return -1, fmt.Errorf("unexpected model type")
+}
+
+// TableColumn defines a column for SelectFromTable.
+type TableColumn struct {
+	Header string
+	Width  int
+}
+
+// TableRow holds cell values for one row.
+type TableRow struct {
+	Columns []string
+}
+
+// SelectFromTable renders an interactive list where each row shows multi-column
+// data inline. Actions (like "Back") are rendered below a separator.
+func SelectFromTable(title string, columns []TableColumn, rows []TableRow, actions ...string) (int, error) {
+	widths := make([]int, len(columns))
+	for i, c := range columns {
+		widths[i] = c.Width
+	}
+
+	items := []list.Item{}
+	for i, r := range rows {
+		cols := make([]string, len(columns))
+		for j := range columns {
+			if j < len(r.Columns) {
+				cols[j] = r.Columns[j]
+			}
+		}
+		items = append(items, tableItem{columns: cols, widths: widths, index: i})
+	}
+
+	if len(actions) > 0 {
+		items = append(items, separatorItem{})
+		idx := len(rows)
+		for _, action := range actions {
+			items = append(items, simpleItem{title: action, index: idx, isAction: true})
+			idx++
+		}
+	}
+
+	listHeight := len(items) + 2
+	if listHeight > 20 {
+		listHeight = 20
+	}
+
+	totalWidth := 0
+	for _, c := range columns {
+		totalWidth += c.Width + 2
+	}
+	totalWidth += 6
+	if totalWidth < 60 {
+		totalWidth = 60
+	}
+
+	l := list.New(items, simpleDelegate{}, totalWidth, listHeight)
+	l.SetShowTitle(false)
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false)
+	l.SetShowHelp(false)
+
+	l.KeyMap = list.KeyMap{
+		CursorUp: key.NewBinding(
+			key.WithKeys("up", "k"),
+		),
+		CursorDown: key.NewBinding(
+			key.WithKeys("down", "j"),
+		),
+	}
+
+	m := selectionModel{
+		list:   l,
+		title:  title,
+		choice: -1,
+	}
+
+	p := tea.NewProgram(m)
+	finalModel, err := p.Run()
+	if err != nil {
+		return -1, fmt.Errorf("error running selection: %w", err)
+	}
+
+	if fm, ok := finalModel.(selectionModel); ok {
+		if fm.choice == -1 {
+			return -1, fmt.Errorf("cancelled")
+		}
+		return fm.choice, nil
 	}
 
 	return -1, fmt.Errorf("unexpected model type")

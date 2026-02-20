@@ -13,7 +13,6 @@ var ServersCmd = &cobra.Command{
 func init() {
 	ServersCmd.AddCommand(listCmd)
 	ServersCmd.AddCommand(showCmd)
-	ServersCmd.AddCommand(createCmd)
 	ServersCmd.AddCommand(rebootCmd)
 	ServersCmd.AddCommand(sshCmd)
 	ServersCmd.AddCommand(metricsCmd)
