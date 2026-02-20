@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/kkz6/launchctl/internal/tui"
 	deploytui "github.com/kkz6/launchctl/internal/tui/deploy"
 	"github.com/spf13/cobra"
@@ -23,15 +24,16 @@ var logsCmd = &cobra.Command{
 	Long:  "View output logs for the latest or a specific deployment. Use --follow to stream logs in real-time.",
 	Args:  cobra.RangeArgs(1, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if logsServerFlag == "" {
-			return fmt.Errorf("--server flag is required")
+		serverID, err := resolve.ServerID(logsServerFlag)
+		if err != nil {
+			return err
 		}
 
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 		siteID := args[0]
 
-		site, err := client.GetSite(logsServerFlag, siteID)
+		site, err := client.GetSite(serverID, siteID)
 		if err != nil {
 			return fmt.Errorf("failed to get site: %w", err)
 		}
@@ -39,12 +41,12 @@ var logsCmd = &cobra.Command{
 		var deployment *api.DeploymentResponse
 
 		if len(args) == 2 {
-			deployment, err = client.GetDeployment(logsServerFlag, siteID, args[1])
+			deployment, err = client.GetDeployment(serverID, siteID, args[1])
 			if err != nil {
 				return fmt.Errorf("failed to get deployment: %w", err)
 			}
 		} else {
-			deployments, err := client.ListDeployments(logsServerFlag, siteID)
+			deployments, err := client.ListDeployments(serverID, siteID)
 			if err != nil {
 				return fmt.Errorf("failed to list deployments: %w", err)
 			}
@@ -64,14 +66,14 @@ var logsCmd = &cobra.Command{
 				return fmt.Errorf("failed to authenticate for live logs: %w", err)
 			}
 
-			return streamLiveLogs(client, cfg, jwt, site, deployment)
+			return streamLiveLogs(client, cfg, jwt, serverID, site, deployment)
 		}
 
-		return showStoredLogs(client, logsServerFlag, deployment)
+		return showStoredLogs(client, serverID, deployment)
 	},
 }
 
-func streamLiveLogs(client *api.Client, cfg *config.Config, token string, site *api.SiteResponse, deployment *api.DeploymentResponse) error {
+func streamLiveLogs(client *api.Client, cfg *config.Config, token, serverID string, site *api.SiteResponse, deployment *api.DeploymentResponse) error {
 	ws, err := api.NewWSClient(cfg, token)
 	if err != nil {
 		return fmt.Errorf("failed to connect to live logs: %w", err)
@@ -85,7 +87,7 @@ func streamLiveLogs(client *api.Client, cfg *config.Config, token string, site *
 
 	model := deploytui.NewModel(deploytui.Opts{
 		SiteName:     site.Address,
-		ServerID:     logsServerFlag,
+		ServerID:     serverID,
 		SiteID:       site.ID,
 		DeploymentID: deployment.ID,
 		Client:       client,

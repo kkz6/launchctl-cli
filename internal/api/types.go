@@ -142,6 +142,21 @@ type SiteResponse struct {
 	UpdatedAt                    string              `json:"updated_at"`
 }
 
+var siteTypeLabels = map[string]string{
+	"laravel":    "Laravel",
+	"wordpress":  "Wordpress",
+	"static":     "Static",
+	"generic":    "Generic",
+	"phpmyadmin": "phpMyAdmin",
+}
+
+func (s SiteResponse) TypeLabel() string {
+	if label, ok := siteTypeLabels[s.Type]; ok {
+		return label
+	}
+	return s.Type
+}
+
 type DeploymentResponse struct {
 	ID           string      `json:"id"`
 	SiteID       string      `json:"site_id"`
@@ -254,5 +269,139 @@ type CreateSiteRequest struct {
 
 type SwitchTeamRequest struct {
 	TeamID string `json:"team_id"`
+}
+
+// File management types
+
+type FileOnServer struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Path        string `json:"path"`
+	Context     string `json:"context,omitempty"`
+	Type        string `json:"type"`
+	FileType    string `json:"file_type"`
+	ShowRoute   string `json:"show_route"`
+	UpdateRoute string `json:"update_route"`
+}
+
+type FileContent struct {
+	Content string `json:"content"`
+	Path    string `json:"path"`
+}
+
+type UpdateFileRequest struct {
+	Content string `json:"content"`
+}
+
+// Log types
+
+type LogInfo struct {
+	Name      string `json:"name"`
+	Software  string `json:"software"`
+	Path      string `json:"path"`
+	ShowRoute string `json:"show_route"`
+}
+
+// Command execution types
+
+type CommandResponse struct {
+	ID        string  `json:"id"`
+	SiteID    string  `json:"site_id"`
+	UserID    string  `json:"user_id"`
+	Command   string  `json:"command"`
+	Status    string  `json:"status"`
+	Output    *string `json:"output,omitempty"`
+	ExitCode  *int    `json:"exit_code,omitempty"`
+	CreatedAt string  `json:"created_at"`
+}
+
+type CreateCommandRequest struct {
+	Command string `json:"command"`
+}
+
+// Service types
+
+type ServiceResponse struct {
+	ID            string  `json:"id"`
+	ServerID      string  `json:"server_id"`
+	Type          string  `json:"type"`
+	TypeLabel     string  `json:"type_label"`
+	Name          string  `json:"name"`
+	Version       *string `json:"version,omitempty"`
+	Status        string  `json:"status"`
+	StatusLabel   string  `json:"status_label"`
+	IsDefault     bool    `json:"is_default"`
+	Software      *string `json:"software,omitempty"`
+	SoftwareLabel *string `json:"software_label,omitempty"`
+	CreatedAt     string  `json:"created_at"`
+	UpdatedAt     string  `json:"updated_at"`
+}
+
+type ServiceOperationRequest struct {
+	Operation string `json:"operation"`
+}
+
+// Database types
+
+type DatabaseResponse struct {
+	ID          string              `json:"id"`
+	ServerID    string              `json:"server_id"`
+	Name        string              `json:"name"`
+	Status      string              `json:"status"`
+	InstalledAt *string             `json:"installed_at,omitempty"`
+	CreatedAt   string              `json:"created_at"`
+	UpdatedAt   string              `json:"updated_at"`
+	Users       []DatabaseUserBrief `json:"users,omitempty"`
+}
+
+type DatabaseUserBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type DatabaseUserResponse struct {
+	ID        string          `json:"id"`
+	ServerID  string          `json:"server_id"`
+	Name      string          `json:"name"`
+	Host      string          `json:"host"`
+	Status    string          `json:"status"`
+	CreatedAt string          `json:"created_at"`
+	UpdatedAt string          `json:"updated_at"`
+	Databases []DatabaseBrief `json:"databases,omitempty"`
+}
+
+type DatabaseBrief struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+type CreateDatabaseRequest struct {
+	Name         string `json:"name"`
+	CreateUser   bool   `json:"create_user"`
+	UserName     string `json:"user_name,omitempty"`
+	UserPassword string `json:"user_password,omitempty"`
+}
+
+// SSH Key types
+
+type SSHKeyResponse struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Fingerprint string  `json:"fingerprint"`
+	Description *string `json:"description,omitempty"`
+	IsGlobal    bool    `json:"is_global"`
+	CreatedAt   string  `json:"created_at"`
+	UpdatedAt   string  `json:"updated_at"`
+}
+
+type CreateSSHKeyRequest struct {
+	Name        string  `json:"name"`
+	PublicKey   string  `json:"public_key"`
+	Description *string `json:"description,omitempty"`
+	IsGlobal    bool    `json:"is_global"`
+}
+
+type AttachSSHKeyRequest struct {
+	SSHKeyID string `json:"ssh_key_id"`
 }
 

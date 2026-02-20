@@ -7,6 +7,7 @@ import (
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/output"
+	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/spf13/cobra"
 )
 
@@ -17,14 +18,15 @@ var listCmd = &cobra.Command{
 	Short: "List deployments for a site",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if listServerFlag == "" {
-			return fmt.Errorf("--server flag is required")
+		serverID, err := resolve.ServerID(listServerFlag)
+		if err != nil {
+			return err
 		}
 
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		deployments, err := client.ListDeployments(listServerFlag, args[0])
+		deployments, err := client.ListDeployments(serverID, args[0])
 		if err != nil {
 			return fmt.Errorf("failed to list deployments: %w", err)
 		}

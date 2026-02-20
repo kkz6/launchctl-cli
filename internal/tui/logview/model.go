@@ -83,6 +83,9 @@ func Run(info Info, ws *api.LogsWSClient) error {
 }
 
 func (m Model) Init() tea.Cmd {
+	if m.ws == nil {
+		return nil
+	}
 	return tea.Batch(
 		m.spinner.Tick,
 		listenLogs(m.ws),
@@ -145,14 +148,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) renderLogs() string {
 	if len(m.logs) == 0 {
 		if m.done {
-			return logLineStyle.Render("No output recorded for this deployment")
+			return logLineStyle.Render("No output available")
 		}
 		return logLineStyle.Render("Loading logs...")
 	}
 
+	isStatic := m.ws == nil
+
 	var b strings.Builder
 	for _, line := range m.logs {
-		b.WriteString(logLineStyle.Render(line))
+		if isStatic {
+			b.WriteString(colorLogLine(line))
+		} else {
+			b.WriteString(logLineStyle.Render(line))
+		}
 		b.WriteString("\n")
 	}
 	return b.String()
@@ -211,5 +220,42 @@ func listenLogs(ws *api.LogsWSClient) tea.Cmd {
 			return doneMsg{}
 		}
 		return logMsg{line: line}
+	}
+}
+
+// RunStatic displays static log content using the same viewport UI as
+// streaming deployment logs. Lines containing error/fatal/panic are
+// highlighted red, lines with warn are highlighted yellow.
+func RunStatic(info Info, content string) error {
+	lines := strings.Split(content, "\n")
+
+	vp := viewport.New(80, 20)
+
+	m := Model{
+		viewport: vp,
+		info:     info,
+		logs:     lines,
+		done:     true,
+	}
+
+	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithMouseCellMotion())
+	_, err := p.Run()
+	return err
+}
+
+var (
+	logErrorStyle = lipgloss.NewStyle().Foreground(tui.Red)
+	logWarnStyle  = lipgloss.NewStyle().Foreground(tui.Yellow)
+)
+
+func colorLogLine(line string) string {
+	lower := strings.ToLower(line)
+	switch {
+	case strings.Contains(lower, "error") || strings.Contains(lower, "fatal") || strings.Contains(lower, "panic"):
+		return logErrorStyle.Render(line)
+	case strings.Contains(lower, "warn"):
+		return logWarnStyle.Render(line)
+	default:
+		return logLineStyle.Render(line)
 	}
 }

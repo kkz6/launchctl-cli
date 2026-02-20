@@ -5,9 +5,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/kkz6/launchctl/cmd/databases"
 	"github.com/kkz6/launchctl/cmd/deploy"
+	"github.com/kkz6/launchctl/cmd/env"
 	"github.com/kkz6/launchctl/cmd/servers"
+	"github.com/kkz6/launchctl/cmd/services"
 	"github.com/kkz6/launchctl/cmd/sites"
+	"github.com/kkz6/launchctl/cmd/sshkeys"
 	"github.com/kkz6/launchctl/cmd/teams"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
@@ -21,6 +25,7 @@ var (
 	Version = "0.1.0"
 
 	jsonOutput bool
+	ciMode     bool
 	cfg        *config.Config
 )
 
@@ -34,6 +39,8 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
 		}
+
+		cfg.ApplyEnvOverrides()
 
 		return nil
 	},
@@ -61,11 +68,18 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
+	rootCmd.PersistentFlags().BoolVar(&ciMode, "ci", false, "CI/CD mode (non-interactive, requires flags/env vars)")
 
 	rootCmd.AddCommand(servers.ServersCmd)
 	rootCmd.AddCommand(sites.SitesCmd)
 	rootCmd.AddCommand(deploy.DeployCmd)
 	rootCmd.AddCommand(teams.TeamsCmd)
+	rootCmd.AddCommand(env.EnvCmd)
+	rootCmd.AddCommand(services.ServicesCmd)
+	rootCmd.AddCommand(databases.DatabasesCmd)
+	rootCmd.AddCommand(sshkeys.SSHKeysCmd)
+	rootCmd.AddCommand(logsCmd)
+	rootCmd.AddCommand(runCmd)
 }
 
 func GetConfig() *config.Config {
@@ -75,3 +89,8 @@ func GetConfig() *config.Config {
 func IsJSON() bool {
 	return jsonOutput
 }
+
+func IsCI() bool {
+	return ciMode
+}
+

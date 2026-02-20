@@ -1,4 +1,4 @@
-package sites
+package services
 
 import (
 	"encoding/json"
@@ -11,13 +11,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var serverIDFlag string
+var listServerFlag string
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List sites on a server",
+	Short: "List installed services on a server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		serverID, err := resolve.ServerID(serverIDFlag)
+		serverID, err := resolve.ServerID(listServerFlag)
 		if err != nil {
 			return err
 		}
@@ -25,41 +25,38 @@ var listCmd = &cobra.Command{
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		sites, err := client.ListSites(serverID)
+		services, err := client.ListServices(serverID)
 		if err != nil {
-			return fmt.Errorf("failed to list sites: %w", err)
+			return fmt.Errorf("failed to list services: %w", err)
 		}
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if jsonOutput {
-			data, _ := json.MarshalIndent(sites, "", "  ")
+			data, _ := json.MarshalIndent(services, "", "  ")
 			fmt.Println(string(data))
 			return nil
 		}
 
 		var rows [][]string
-		for _, s := range sites {
-			deployStatus := ""
-			if s.LatestDeployment != nil {
-				deployStatus = s.LatestDeployment.Status
+		for _, s := range services {
+			version := ""
+			if s.Version != nil {
+				version = *s.Version
 			}
 
 			rows = append(rows, []string{
-				s.ID,
-				s.Address,
-				s.TypeLabel(),
-				s.RepositoryBranch,
+				s.Name,
+				s.TypeLabel,
+				version,
 				output.StatusDot(s.Status),
-				deployStatus,
-				s.PHPVersion,
 			})
 		}
 
-		output.RenderTable("Sites", []string{"ID", "Address", "Type", "Branch", "Status", "Deploy", "PHP"}, rows)
+		output.RenderTable("Services", []string{"Name", "Type", "Version", "Status"}, rows)
 		return nil
 	},
 }
 
 func init() {
-	listCmd.Flags().StringVar(&serverIDFlag, "server", "", "Server ID (required)")
+	listCmd.Flags().StringVar(&listServerFlag, "server", "", "Server ID")
 }

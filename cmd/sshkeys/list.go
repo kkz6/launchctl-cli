@@ -1,4 +1,4 @@
-package servers
+package sshkeys
 
 import (
 	"encoding/json"
@@ -12,42 +12,39 @@ import (
 
 var listCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all servers",
+	Short: "List team SSH keys",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		servers, _, err := client.ListServers()
+		keys, err := client.ListSSHKeys()
 		if err != nil {
-			return fmt.Errorf("failed to list servers: %w", err)
+			return fmt.Errorf("failed to list SSH keys: %w", err)
 		}
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		if jsonOutput {
-			data, _ := json.MarshalIndent(servers, "", "  ")
+			data, _ := json.MarshalIndent(keys, "", "  ")
 			fmt.Println(string(data))
 			return nil
 		}
 
 		var rows [][]string
-		for _, s := range servers {
-			ip := ""
-			if s.PublicIPv4 != nil {
-				ip = *s.PublicIPv4
+		for _, k := range keys {
+			global := "No"
+			if k.IsGlobal {
+				global = "Yes"
 			}
 
 			rows = append(rows, []string{
-				s.ID,
-				s.Name,
-				s.ProviderLabel,
-				s.TypeLabel,
-				output.StatusDot(s.Status),
-				ip,
-				fmt.Sprintf("%d", s.SitesCount),
+				k.ID,
+				k.Name,
+				k.Fingerprint,
+				global,
 			})
 		}
 
-		output.RenderTable("Servers", []string{"ID", "Name", "Provider", "Type", "Status", "IP", "Sites"}, rows)
+		output.RenderTable("SSH Keys", []string{"ID", "Name", "Fingerprint", "Global"}, rows)
 		return nil
 	},
 }

@@ -16,15 +16,15 @@ func favoriteActions(client *api.Client, cfg *config.Config, fav config.Favorite
 
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("★ %s", fav.SiteAddress),
-			[]string{"Deploy", "SSH", "View Logs", "Remove from Favorites"},
+			[]string{"Deploy", "SSH", "View Logs", "Environment", "Run Command", "Remove from Favorites"},
 			"Back",
 		)
-		if err != nil || choice == 4 {
+		if err != nil || choice == 6 {
 			return
 		}
 
 		server, err := client.GetServer(fav.ServerID)
-		if err != nil && choice != 3 {
+		if err != nil && choice != 5 {
 			tui.ShowError(fmt.Sprintf("Failed to fetch server: %s", err))
 			tui.WaitForEnter()
 			continue
@@ -52,6 +52,10 @@ func favoriteActions(client *api.Client, cfg *config.Config, fav config.Favorite
 			}
 			viewDeployments(client, cfg, fav.ServerID, fav.ServerName, *site)
 		case 3:
+			viewEnvFile(client, fav.ServerID, fav.SiteID, fav.ServerName, fav.SiteAddress)
+		case 4:
+			runSiteCommand(client, fav.ServerID, fav.SiteID, fav.ServerName, fav.SiteAddress)
+		case 5:
 			cfg.RemoveFavorite(fav.SiteID)
 			notify.Success(fmt.Sprintf("Removed %s from favorites", fav.SiteAddress))
 			return

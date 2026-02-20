@@ -7,6 +7,7 @@ import (
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/output"
+	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -18,14 +19,20 @@ var showCmd = &cobra.Command{
 	Short: "Show deployment details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if showServerFlag == "" || showSiteFlag == "" {
-			return fmt.Errorf("--server and --site flags are required")
+		serverID, err := resolve.ServerID(showServerFlag)
+		if err != nil {
+			return err
+		}
+
+		siteID, err := resolve.SiteID(showSiteFlag)
+		if err != nil {
+			return err
 		}
 
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		d, err := client.GetDeployment(showServerFlag, showSiteFlag, args[0])
+		d, err := client.GetDeployment(serverID, siteID, args[0])
 		if err != nil {
 			return fmt.Errorf("failed to get deployment: %w", err)
 		}

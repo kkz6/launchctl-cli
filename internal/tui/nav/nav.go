@@ -2,6 +2,7 @@ package nav
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
@@ -10,6 +11,7 @@ import (
 	"github.com/kkz6/launchctl/internal/output"
 	"github.com/kkz6/launchctl/internal/terminal"
 	"github.com/kkz6/launchctl/internal/tui"
+	"github.com/kkz6/launchctl/internal/tui/logview"
 	metricstui "github.com/kkz6/launchctl/internal/tui/metrics"
 )
 
@@ -68,8 +70,10 @@ func serversMenu(client *api.Client, cfg *config.Config) {
 		columns := []tui.TableColumn{
 			{Header: "Name", Width: 20},
 			{Header: "Provider", Width: 14},
+			{Header: "Type", Width: 12},
 			{Header: "Status", Width: 16},
 			{Header: "IP", Width: 16},
+			{Header: "Sites", Width: 6},
 		}
 
 		var rows []tui.TableRow
@@ -79,7 +83,7 @@ func serversMenu(client *api.Client, cfg *config.Config) {
 				ip = *s.PublicIPv4
 			}
 			rows = append(rows, tui.TableRow{
-				Columns: []string{s.Name, s.ProviderLabel, output.StatusDot(s.Status), ip},
+				Columns: []string{s.Name, s.ProviderLabel, s.TypeLabel, output.StatusDot(s.Status), ip, fmt.Sprintf("%d", s.SitesCount)},
 			})
 		}
 
@@ -99,10 +103,10 @@ func serverActions(client *api.Client, cfg *config.Config, server api.ServerResp
 
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Server: %s", server.Name),
-			[]string{"Show Details", "View Sites", "Metrics", "Reboot", "SSH"},
+			[]string{"Show Details", "View Sites", "View Logs", "Services", "Databases", "Metrics", "Reboot", "SSH"},
 			"Back",
 		)
-		if err != nil || choice == 5 {
+		if err != nil || choice == 8 {
 			return
 		}
 
@@ -112,10 +116,16 @@ func serverActions(client *api.Client, cfg *config.Config, server api.ServerResp
 		case 1:
 			sitesMenu(client, cfg, server.ID, server.Name)
 		case 2:
-			showServerMetrics(client, cfg, server)
+			viewServerLogs(client, server.ID, server.Name)
 		case 3:
-			rebootServer(client, server)
+			viewServices(client, server.ID, server.Name)
 		case 4:
+			viewDatabases(client, server.ID, server.Name)
+		case 5:
+			showServerMetrics(client, cfg, server)
+		case 6:
+			rebootServer(client, server)
+		case 7:
 			sshIntoServer(cfg, server)
 		}
 	}
@@ -251,6 +261,183 @@ func sshIntoServer(cfg *config.Config, server api.ServerResponse) {
 	}
 }
 
+
+func viewServerLogs(client *api.Client, serverID, serverName string) {
+	for {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Logs")
+
+		logs, err := client.ListServerLogs(serverID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to list logs: %s", err))
+			tui.WaitForEnter()
+			return
+		}
+
+		if len(logs) == 0 {
+			tui.ShowInfo("No logs available")
+			tui.WaitForEnter()
+			return
+		}
+
+		columns := []tui.TableColumn{
+			{Header: "Name", Width: 20},
+			{Header: "Software", Width: 16},
+			{Header: "Path", Width: 40},
+		}
+
+		var rows []tui.TableRow
+		for _, l := range logs {
+			rows = append(rows, tui.TableRow{
+				Columns: []string{l.Name, l.Software, l.Path},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select a log to view", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
+		}
+
+		showServerLogContent(client, serverID, serverName, logs[choice])
+	}
+}
+
+func showServerLogContent(client *api.Client, serverID, serverName string, log api.LogInfo) {
+	content, err := client.GetServerLogContent(serverID, log.ShowRoute)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to get log content: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	info := logview.Info{
+		Title: fmt.Sprintf("Log: %s", log.Name),
+	}
+	info.Lines = append(info.Lines,
+		struct{ Label, Value string }{"Software", log.Software},
+		struct{ Label, Value string }{"Path", log.Path},
+	)
+
+	if err := logview.RunStatic(info, content.Content); err != nil {
+		tui.ShowError(fmt.Sprintf("Log viewer error: %s", err))
+		tui.WaitForEnter()
+	}
+}
+
+func viewServices(client *api.Client, serverID, serverName string) {
+	for {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Services")
+
+		services, err := client.ListServices(serverID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to list services: %s", err))
+			tui.WaitForEnter()
+			return
+		}
+
+		if len(services) == 0 {
+			tui.ShowInfo("No services found")
+			tui.WaitForEnter()
+			return
+		}
+
+		columns := []tui.TableColumn{
+			{Header: "Name", Width: 20},
+			{Header: "Type", Width: 14},
+			{Header: "Version", Width: 10},
+			{Header: "Status", Width: 16},
+		}
+
+		var rows []tui.TableRow
+		for _, s := range services {
+			version := ""
+			if s.Version != nil {
+				version = *s.Version
+			}
+			rows = append(rows, tui.TableRow{
+				Columns: []string{s.Name, s.TypeLabel, version, output.StatusDot(s.Status)},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select a service", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
+		}
+
+		serviceOperationMenu(client, serverID, serverName, services[choice])
+	}
+}
+
+func serviceOperationMenu(client *api.Client, serverID, serverName string, service api.ServiceResponse) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Services", service.Name)
+
+	choice, err := tui.SelectFromList(
+		fmt.Sprintf("Service: %s (%s)", service.Name, output.StatusDot(service.Status)),
+		[]string{"Restart", "Start", "Stop"},
+		"Back",
+	)
+	if err != nil || choice == 3 {
+		return
+	}
+
+	operations := []string{"restart", "start", "stop"}
+	op := operations[choice]
+
+	err = client.ServiceOperation(serverID, service.ID, api.ServiceOperationRequest{
+		Operation: op,
+	})
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to %s service: %s", op, err))
+		tui.WaitForEnter()
+		return
+	}
+
+	tui.ShowSuccess(fmt.Sprintf("Service %s %s initiated", service.Name, op))
+	tui.WaitForEnter()
+}
+
+func viewDatabases(client *api.Client, serverID, serverName string) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Databases")
+
+	databases, err := client.ListDatabases(serverID)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to list databases: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	if len(databases) == 0 {
+		tui.ShowInfo("No databases found")
+		tui.WaitForEnter()
+		return
+	}
+
+	columns := []tui.TableColumn{
+		{Header: "Name", Width: 24},
+		{Header: "Status", Width: 16},
+		{Header: "Users", Width: 30},
+	}
+
+	var rows []tui.TableRow
+	for _, db := range databases {
+		var userNames []string
+		for _, u := range db.Users {
+			userNames = append(userNames, u.Name)
+		}
+		users := ""
+		if len(userNames) > 0 {
+			users = strings.Join(userNames, ", ")
+		}
+		rows = append(rows, tui.TableRow{
+			Columns: []string{db.Name, output.StatusDot(db.Status), users},
+		})
+	}
+
+	tui.SelectFromTable("Databases", columns, rows, "Back")
+}
 
 func domainsMenu(client *api.Client, cfg *config.Config) {
 	tui.ClearScreen()

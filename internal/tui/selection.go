@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/kkz6/launchctl/internal/notify"
 )
 
@@ -126,10 +127,12 @@ func renderTableRow(w io.Writer, m list.Model, index int, ti tableItem) {
 	for col, val := range ti.columns {
 		w := ti.widths[col]
 		cell := val
-		if len(cell) > w {
-			cell = cell[:w-1] + "…"
+		visualWidth := lipgloss.Width(cell)
+		if visualWidth > w {
+			cell = ansi.Truncate(cell, w-1, "…")
+			visualWidth = lipgloss.Width(cell)
 		}
-		padded := cell + strings.Repeat(" ", max(0, w-lipgloss.Width(cell)))
+		padded := cell + strings.Repeat(" ", max(0, w-visualWidth))
 		if selected {
 			row.WriteString(tableColSelected.Render(padded))
 		} else {
@@ -144,12 +147,14 @@ func renderTableRow(w io.Writer, m list.Model, index int, ti tableItem) {
 }
 
 type selectionModel struct {
-	list       list.Model
-	choice     int
-	quitting   bool
-	title      string
-	termHeight int
-	termWidth  int
+	list         list.Model
+	choice       int
+	quitting     bool
+	title        string
+	termHeight   int
+	termWidth    int
+	tableHeaders []string
+	tableWidths  []int
 }
 
 func (m selectionModel) Init() tea.Cmd {
@@ -241,6 +246,35 @@ func (m selectionModel) View() string {
 	notifyBar := notify.Render()
 
 	content := titleStyle.Render(m.title) + "\n"
+
+	if len(m.tableHeaders) > 0 {
+		headerStyle := lipgloss.NewStyle().Foreground(Muted).Bold(true)
+		dividerStyle := lipgloss.NewStyle().Foreground(DarkSlate)
+
+		var headerRow strings.Builder
+		headerRow.WriteString("     ")
+		var dividerRow strings.Builder
+		dividerRow.WriteString("     ")
+
+		for i, h := range m.tableHeaders {
+			w := m.tableWidths[i]
+			cell := h
+			if len(cell) > w {
+				cell = cell[:w-1] + "…"
+			}
+			padded := cell + strings.Repeat(" ", max(0, w-len(cell)))
+			headerRow.WriteString(headerStyle.Render(padded))
+			dividerRow.WriteString(dividerStyle.Render(strings.Repeat("─", w)))
+			if i < len(m.tableHeaders)-1 {
+				headerRow.WriteString("  ")
+				dividerRow.WriteString("  ")
+			}
+		}
+
+		content += headerRow.String() + "\n"
+		content += dividerRow.String() + "\n"
+	}
+
 	content += m.list.View()
 
 	contentLines := strings.Count(content, "\n") + 1
@@ -402,10 +436,17 @@ func SelectFromTable(title string, columns []TableColumn, rows []TableRow, actio
 		),
 	}
 
+	headers := make([]string, len(columns))
+	for i, c := range columns {
+		headers[i] = c.Header
+	}
+
 	m := selectionModel{
-		list:   l,
-		title:  title,
-		choice: -1,
+		list:         l,
+		title:        title,
+		choice:       -1,
+		tableHeaders: headers,
+		tableWidths:  widths,
 	}
 
 	p := tea.NewProgram(m)

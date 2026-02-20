@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -17,8 +18,14 @@ var rollbackCmd = &cobra.Command{
 	Short: "Rollback to a previous deployment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if rollbackServerFlag == "" || rollbackSiteFlag == "" {
-			return fmt.Errorf("--server and --site flags are required")
+		serverID, err := resolve.ServerID(rollbackServerFlag)
+		if err != nil {
+			return err
+		}
+
+		siteID, err := resolve.SiteID(rollbackSiteFlag)
+		if err != nil {
+			return err
 		}
 
 		var confirm bool
@@ -36,7 +43,7 @@ var rollbackCmd = &cobra.Command{
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		d, err := client.RollbackDeployment(rollbackServerFlag, rollbackSiteFlag, args[0])
+		d, err := client.RollbackDeployment(serverID, siteID, args[0])
 		if err != nil {
 			return fmt.Errorf("failed to rollback: %w", err)
 		}

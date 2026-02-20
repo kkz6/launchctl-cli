@@ -2,6 +2,8 @@ package nav
 
 import (
 	"fmt"
+	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -33,10 +35,12 @@ func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName stri
 		}
 
 		columns := []tui.TableColumn{
-			{Header: "Address", Width: 24},
+			{Header: "Address", Width: 26},
 			{Header: "Type", Width: 10},
-			{Header: "Status", Width: 16},
-			{Header: "Last Deploy", Width: 12},
+			{Header: "Branch", Width: 14},
+			{Header: "Status", Width: 14},
+			{Header: "Deploy", Width: 12},
+			{Header: "PHP", Width: 8},
 		}
 
 		var rows []tui.TableRow
@@ -46,7 +50,7 @@ func sitesMenu(client *api.Client, cfg *config.Config, serverID, serverName stri
 				deployStatus = s.LatestDeployment.Status
 			}
 			rows = append(rows, tui.TableRow{
-				Columns: []string{s.Address, s.Type, output.StatusDot(s.Status), deployStatus},
+				Columns: []string{s.Address, s.TypeLabel(), s.RepositoryBranch, output.StatusDot(s.Status), deployStatus, s.PHPVersion},
 			})
 		}
 
@@ -71,10 +75,10 @@ func siteActions(client *api.Client, cfg *config.Config, serverID, serverName st
 
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Site: %s", site.Address),
-			[]string{"Show Details", "Deploy", "View Deployments", favLabel},
+			[]string{"Show Details", "Deploy", "View Deployments", "Environment", "View Logs", "Run Command", favLabel},
 			"Back",
 		)
-		if err != nil || choice == 4 {
+		if err != nil || choice == 7 {
 			return
 		}
 
@@ -86,6 +90,12 @@ func siteActions(client *api.Client, cfg *config.Config, serverID, serverName st
 		case 2:
 			viewDeployments(client, cfg, serverID, serverName, site)
 		case 3:
+			viewEnvFile(client, serverID, site.ID, serverName, site.Address)
+		case 4:
+			viewSiteLogs(client, serverID, site.ID, serverName, site.Address)
+		case 5:
+			runSiteCommand(client, serverID, site.ID, serverName, site.Address)
+		case 6:
 			if cfg.IsFavorite(site.ID) {
 				cfg.RemoveFavorite(site.ID)
 				notify.Success(fmt.Sprintf("Removed %s from favorites", site.Address))
@@ -108,7 +118,7 @@ func showSiteDetails(serverName string, site api.SiteResponse) {
 
 	fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
 	fmt.Println(tui.Label.Render("Status:") + output.StatusDot(site.Status))
-	fmt.Println(tui.Label.Render("Type:") + tui.Value.Render(site.Type))
+	fmt.Println(tui.Label.Render("Type:") + tui.Value.Render(site.TypeLabel()))
 	fmt.Println(tui.Label.Render("URL:") + tui.Value.Render(site.URL))
 	fmt.Println(tui.Label.Render("Path:") + tui.Value.Render(site.Path))
 	fmt.Println(tui.Label.Render("PHP:") + tui.Value.Render(site.PHPVersion))
@@ -292,6 +302,196 @@ func viewDeploymentLogs(client *api.Client, cfg *config.Config, serverID, server
 		tui.ShowError(fmt.Sprintf("Log viewer error: %s", err))
 		tui.WaitForEnter()
 	}
+}
+
+func viewEnvFile(client *api.Client, serverID, siteID, serverName, siteName string) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", siteName, "Environment")
+
+	files, err := client.ListFiles(serverID, siteID)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to list files: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	var envFile *api.FileOnServer
+	for _, f := range files {
+		if f.Type == "environment" {
+			envFile = &f
+			break
+		}
+	}
+
+	if envFile == nil {
+		tui.ShowInfo("No environment file found for this site")
+		tui.WaitForEnter()
+		return
+	}
+
+	content, err := client.GetFileContent(serverID, siteID, envFile.ShowRoute)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to get environment file: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	fmt.Println(tui.CreateBox("Environment File", content.Content, 80))
+	fmt.Println()
+	fmt.Println(tui.Dim.Render("To update, use: lctl env push --server <id> --site <id> --file .env"))
+	fmt.Println()
+	tui.WaitForEnter()
+}
+
+func viewSiteLogs(client *api.Client, serverID, siteID, serverName, siteName string) {
+	for {
+		tui.ClearScreen()
+		tui.PrintHeader("lctl", "Servers", serverName, "Sites", siteName, "Logs")
+
+		files, err := client.ListFiles(serverID, siteID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to list files: %s", err))
+			tui.WaitForEnter()
+			return
+		}
+
+		var logFiles []api.FileOnServer
+		for _, f := range files {
+			if f.FileType == "log" || strings.Contains(strings.ToLower(f.Name), "log") {
+				logFiles = append(logFiles, f)
+			}
+		}
+
+		if len(logFiles) == 0 {
+			tui.ShowInfo("No log files found")
+			tui.WaitForEnter()
+			return
+		}
+
+		columns := []tui.TableColumn{
+			{Header: "Name", Width: 24},
+			{Header: "Description", Width: 30},
+			{Header: "Path", Width: 40},
+		}
+
+		var rows []tui.TableRow
+		for _, f := range logFiles {
+			rows = append(rows, tui.TableRow{
+				Columns: []string{f.Name, f.Description, f.Path},
+			})
+		}
+
+		choice, err := tui.SelectFromTable("Select a log to view", columns, rows, "Back")
+		if err != nil || choice == len(rows) {
+			return
+		}
+
+		showSiteLogContent(client, serverID, siteID, serverName, siteName, logFiles[choice])
+	}
+}
+
+func showSiteLogContent(client *api.Client, serverID, siteID, serverName, siteName string, file api.FileOnServer) {
+	content, err := client.GetFileContent(serverID, siteID, file.ShowRoute)
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to get log content: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	info := logview.Info{
+		Title: fmt.Sprintf("Log: %s", file.Name),
+	}
+	info.Lines = append(info.Lines,
+		struct{ Label, Value string }{"Site", siteName},
+		struct{ Label, Value string }{"Path", file.Path},
+	)
+
+	if err := logview.RunStatic(info, content.Content); err != nil {
+		tui.ShowError(fmt.Sprintf("Log viewer error: %s", err))
+		tui.WaitForEnter()
+	}
+}
+
+func runSiteCommand(client *api.Client, serverID, siteID, serverName, siteName string) {
+	tui.ClearScreen()
+	tui.PrintHeader("lctl", "Servers", serverName, "Sites", siteName, "Run Command")
+
+	command, err := tui.GetInput("Enter command to run", "e.g. php artisan migrate:status", false, func(s string) error {
+		if strings.TrimSpace(s) == "" {
+			return fmt.Errorf("command cannot be empty")
+		}
+		return nil
+	})
+	if err != nil {
+		return
+	}
+
+	var confirm bool
+	huh.NewConfirm().
+		Title(fmt.Sprintf("Run %q on %s?", command, siteName)).
+		Value(&confirm).
+		Run()
+
+	if !confirm {
+		fmt.Println(tui.Dim.Render("Cancelled"))
+		tui.WaitForEnter()
+		return
+	}
+
+	result, err := client.CreateCommand(serverID, siteID, api.CreateCommandRequest{
+		Command: command,
+	})
+	if err != nil {
+		tui.ShowError(fmt.Sprintf("Failed to execute command: %s", err))
+		tui.WaitForEnter()
+		return
+	}
+
+	fmt.Print(tui.Dim.Render("Executing... "))
+
+	commandID := result.ID
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for range ticker.C {
+		commands, err := client.ListCommands(serverID, siteID)
+		if err != nil {
+			tui.ShowError(fmt.Sprintf("Failed to check command status: %s", err))
+			tui.WaitForEnter()
+			return
+		}
+
+		for _, cmd := range commands {
+			if cmd.ID == commandID {
+				result = &cmd
+				break
+			}
+		}
+
+		if result.Status == "completed" || result.Status == "failed" {
+			break
+		}
+	}
+
+	fmt.Println()
+	fmt.Println()
+
+	if result.Output != nil {
+		fmt.Println(tui.CreateBox("Output", *result.Output, 80))
+	}
+
+	if result.Status == "failed" {
+		exitCode := 1
+		if result.ExitCode != nil {
+			exitCode = *result.ExitCode
+		}
+		tui.ShowError(fmt.Sprintf("Command failed with exit code %d", exitCode))
+	} else {
+		tui.ShowSuccess("Command completed successfully")
+	}
+
+	fmt.Println()
+	tui.WaitForEnter()
 }
 
 func truncate(s string, maxLen int) string {

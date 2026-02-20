@@ -15,13 +15,28 @@ const (
 const APIURL = "https://launchctl.io"
 
 type Favorite struct {
-	ServerID   string `json:"server_id"`
-	ServerName string `json:"server_name"`
-	SiteID     string `json:"site_id"`
+	ServerID    string `json:"server_id"`
+	ServerName  string `json:"server_name"`
+	SiteID      string `json:"site_id"`
 	SiteAddress string `json:"site_address"`
 }
 
+type Profile struct {
+	AccessToken string     `json:"access_token,omitempty"`
+	TeamID      string     `json:"team_id,omitempty"`
+	TeamName    string     `json:"team_name,omitempty"`
+	UserID      string     `json:"user_id,omitempty"`
+	UserName    string     `json:"user_name,omitempty"`
+	UserEmail   string     `json:"user_email,omitempty"`
+	Favorites   []Favorite `json:"favorites,omitempty"`
+}
+
 type Config struct {
+	ActiveProfile string              `json:"active_profile,omitempty"`
+	Profiles      map[string]*Profile `json:"profiles,omitempty"`
+
+	// Flat fields populated from the active profile for convenience.
+	// These are the fields all existing code uses.
 	AccessToken string     `json:"access_token,omitempty"`
 	TeamID      string     `json:"team_id,omitempty"`
 	TeamName    string     `json:"team_name,omitempty"`
@@ -63,10 +78,52 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
 
+	// Migrate: if we have flat credentials but no profiles, create a "default" profile
+	if cfg.ActiveProfile == "" && cfg.AccessToken != "" && len(cfg.Profiles) == 0 {
+		cfg.Profiles = map[string]*Profile{
+			"default": {
+				AccessToken: cfg.AccessToken,
+				TeamID:      cfg.TeamID,
+				TeamName:    cfg.TeamName,
+				UserID:      cfg.UserID,
+				UserName:    cfg.UserName,
+				UserEmail:   cfg.UserEmail,
+				Favorites:   cfg.Favorites,
+			},
+		}
+		cfg.ActiveProfile = "default"
+	}
+
+	// If we have profiles, load the active one into flat fields
+	if cfg.ActiveProfile != "" && cfg.Profiles != nil {
+		if p, ok := cfg.Profiles[cfg.ActiveProfile]; ok {
+			cfg.AccessToken = p.AccessToken
+			cfg.TeamID = p.TeamID
+			cfg.TeamName = p.TeamName
+			cfg.UserID = p.UserID
+			cfg.UserName = p.UserName
+			cfg.UserEmail = p.UserEmail
+			cfg.Favorites = p.Favorites
+		}
+	}
+
 	return cfg, nil
 }
 
 func (c *Config) Save() error {
+	// Sync flat fields back to the active profile before saving
+	if c.ActiveProfile != "" && c.Profiles != nil {
+		if p, ok := c.Profiles[c.ActiveProfile]; ok {
+			p.AccessToken = c.AccessToken
+			p.TeamID = c.TeamID
+			p.TeamName = c.TeamName
+			p.UserID = c.UserID
+			p.UserName = c.UserName
+			p.UserEmail = c.UserEmail
+			p.Favorites = c.Favorites
+		}
+	}
+
 	path, err := configPath()
 	if err != nil {
 		return err
@@ -161,4 +218,77 @@ func (c *Config) IsFavorite(siteID string) bool {
 		}
 	}
 	return false
+}
+
+func (c *Config) ApplyEnvOverrides() {
+	if token := os.Getenv("LAUNCHCTL_TOKEN"); token != "" {
+		c.AccessToken = token
+	}
+
+	if teamID := os.Getenv("LAUNCHCTL_TEAM_ID"); teamID != "" {
+		c.TeamID = teamID
+	}
+}
+
+func (c *Config) ActiveProfileName() string {
+	if c.ActiveProfile != "" {
+		return c.ActiveProfile
+	}
+	return "default"
+}
+
+func (c *Config) ListProfiles() []string {
+	var names []string
+	for name := range c.Profiles {
+		names = append(names, name)
+	}
+	return names
+}
+
+func (c *Config) AddProfile(name string, profile *Profile) error {
+	if c.Profiles == nil {
+		c.Profiles = make(map[string]*Profile)
+	}
+
+	c.Profiles[name] = profile
+	return c.Save()
+}
+
+func (c *Config) UseProfile(name string) error {
+	if c.Profiles == nil {
+		return fmt.Errorf("no profiles configured")
+	}
+
+	p, ok := c.Profiles[name]
+	if !ok {
+		return fmt.Errorf("profile %q not found", name)
+	}
+
+	c.ActiveProfile = name
+	c.AccessToken = p.AccessToken
+	c.TeamID = p.TeamID
+	c.TeamName = p.TeamName
+	c.UserID = p.UserID
+	c.UserName = p.UserName
+	c.UserEmail = p.UserEmail
+	c.Favorites = p.Favorites
+
+	return c.Save()
+}
+
+func (c *Config) RemoveProfile(name string) error {
+	if c.Profiles == nil {
+		return fmt.Errorf("no profiles configured")
+	}
+
+	if _, ok := c.Profiles[name]; !ok {
+		return fmt.Errorf("profile %q not found", name)
+	}
+
+	if c.ActiveProfile == name {
+		return fmt.Errorf("cannot remove the active profile — switch to another profile first")
+	}
+
+	delete(c.Profiles, name)
+	return c.Save()
 }

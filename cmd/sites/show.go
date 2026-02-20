@@ -7,6 +7,7 @@ import (
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/output"
+	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -18,14 +19,15 @@ var showCmd = &cobra.Command{
 	Short: "Show site details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if showServerIDFlag == "" {
-			return fmt.Errorf("--server flag is required")
+		serverID, err := resolve.ServerID(showServerIDFlag)
+		if err != nil {
+			return err
 		}
 
 		cfg, _ := config.Load()
 		client := api.NewClient(cfg)
 
-		site, err := client.GetSite(showServerIDFlag, args[0])
+		site, err := client.GetSite(serverID, args[0])
 		if err != nil {
 			return fmt.Errorf("failed to get site: %w", err)
 		}
@@ -42,7 +44,7 @@ var showCmd = &cobra.Command{
 		fmt.Println()
 		fmt.Println(tui.Label.Render("ID:") + tui.Value.Render(site.ID))
 		fmt.Println(tui.Label.Render("Status:") + output.StatusDot(site.Status))
-		fmt.Println(tui.Label.Render("Type:") + tui.Value.Render(site.Type))
+		fmt.Println(tui.Label.Render("Type:") + tui.Value.Render(site.TypeLabel()))
 		fmt.Println(tui.Label.Render("URL:") + tui.Value.Render(site.URL))
 		fmt.Println(tui.Label.Render("Path:") + tui.Value.Render(site.Path))
 		fmt.Println(tui.Label.Render("PHP:") + tui.Value.Render(site.PHPVersion))
