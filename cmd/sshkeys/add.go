@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/kkz6/launchctl/internal/api"
-	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -36,7 +36,7 @@ var addCmd = &cobra.Command{
 
 		publicKey := strings.TrimSpace(string(data))
 
-		cfg, _ := config.Load()
+		cfg := appstate.GetConfig()
 		client := api.NewClient(cfg)
 
 		key, err := client.CreateSSHKey(api.CreateSSHKeyRequest{

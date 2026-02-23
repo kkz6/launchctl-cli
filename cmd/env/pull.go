@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/kkz6/launchctl/internal/api"
-	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
@@ -32,7 +32,7 @@ var pullCmd = &cobra.Command{
 			return err
 		}
 
-		cfg, _ := config.Load()
+		cfg := appstate.GetConfig()
 		client := api.NewClient(cfg)
 
 		envFile, err := findEnvFile(client, serverID, siteID)

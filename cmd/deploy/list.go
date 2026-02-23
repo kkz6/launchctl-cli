@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kkz6/launchctl/internal/api"
-	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/output"
 	"github.com/kkz6/launchctl/internal/resolve"
 	"github.com/spf13/cobra"
@@ -23,7 +23,7 @@ var listCmd = &cobra.Command{
 			return err
 		}
 
-		cfg, _ := config.Load()
+		cfg := appstate.GetConfig()
 		client := api.NewClient(cfg)
 
 		deployments, err := client.ListDeployments(serverID, args[0])

@@ -5,7 +5,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
-	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +14,7 @@ var switchCmd = &cobra.Command{
 	Use:   "switch",
 	Short: "Switch active team",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, _ := config.Load()
+		cfg := appstate.GetConfig()
 		client := api.NewClient(cfg)
 
 		teams, err := client.ListTeams()

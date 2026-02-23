@@ -18,6 +18,7 @@ import (
 	"github.com/kkz6/launchctl/cmd/sshkeys"
 	"github.com/kkz6/launchctl/cmd/teams"
 	"github.com/kkz6/launchctl/internal/api"
+	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/splash"
 	"github.com/kkz6/launchctl/internal/tui"
@@ -52,6 +53,8 @@ var rootCmd = &cobra.Command{
 		}
 
 		cfg.ApplyEnvOverrides()
+
+		appstate.SetConfig(cfg)
 
 		return nil
 	},
