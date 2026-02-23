@@ -29,15 +29,17 @@ blobs:
     directory: "{{ .Tag }}"
     disable_ssl: false
 
-homebrew_casks:
+brews:
   - name: lctl
-    binaries:
-      - lctl
     homepage: "https://launchctl.io"
     description: "CLI for managing launchctl servers, sites, and deployments"
-    directory: Casks
-    url:
-      template: "https://sin1.contabostorage.com/2fac7399ecc245c4b352abf9eb154e1d:launchctl-cli/{{ .Tag }}/{{ .ArtifactName }}"
+    license: "Proprietary"
+    directory: Formula
+    url_template: "https://sin1.contabostorage.com/2fac7399ecc245c4b352abf9eb154e1d:launchctl-cli/{{ .Tag }}/{{ .ArtifactName }}"
+    install: |
+      bin.install "lctl"
+    test: |
+      system "#{bin}/lctl", "version"
     repository:
       owner: kkz6
       name: homebrew-tap
