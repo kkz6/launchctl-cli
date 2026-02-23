@@ -21,6 +21,14 @@ archives:
       - tar.gz
     name_template: "{{ .ProjectName }}-{{ .Os }}-{{ .Arch }}"
 
+blobs:
+  - provider: s3
+    endpoint: "https://sin1.contabostorage.com"
+    bucket: launchctl-cli
+    region: sin1
+    directory: "{{ .Tag }}"
+    disable_ssl: false
+
 homebrew_casks:
   - name: lctl
     binaries:
@@ -28,6 +36,8 @@ homebrew_casks:
     homepage: "https://launchctl.io"
     description: "CLI for managing launchctl servers, sites, and deployments"
     directory: Casks
+    url:
+      template: "https://sin1.contabostorage.com/launchctl-cli/{{ .Tag }}/{{ .ArtifactName }}"
     repository:
       owner: kkz6
       name: homebrew-tap
