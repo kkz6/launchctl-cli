@@ -28,9 +28,10 @@ import (
 var (
 	Version = "0.1.0"
 
-	jsonOutput bool
-	ciMode     bool
-	cfg        *config.Config
+	jsonOutput  bool
+	ciMode      bool
+	profileFlag string
+	cfg         *config.Config
 )
 
 var rootCmd = &cobra.Command{
@@ -42,6 +43,12 @@ var rootCmd = &cobra.Command{
 		cfg, err = config.Load()
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w", err)
+		}
+
+		if profileFlag != "" {
+			if err := cfg.ActivateProfile(profileFlag); err != nil {
+				return fmt.Errorf("--profile: %w", err)
+			}
 		}
 
 		cfg.ApplyEnvOverrides()
@@ -73,6 +80,7 @@ func Execute() {
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&ciMode, "ci", false, "CI/CD mode (non-interactive, requires flags/env vars)")
+	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Use a specific profile for this command")
 
 	rootCmd.AddCommand(servers.ServersCmd)
 	rootCmd.AddCommand(sites.SitesCmd)

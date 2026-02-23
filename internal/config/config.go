@@ -276,6 +276,30 @@ func (c *Config) UseProfile(name string) error {
 	return c.Save()
 }
 
+// ActivateProfile loads a profile into the flat fields for the current
+// process without persisting the change to disk. Used for --profile flag.
+func (c *Config) ActivateProfile(name string) error {
+	if c.Profiles == nil {
+		return fmt.Errorf("no profiles configured")
+	}
+
+	p, ok := c.Profiles[name]
+	if !ok {
+		return fmt.Errorf("profile %q not found", name)
+	}
+
+	c.ActiveProfile = name
+	c.AccessToken = p.AccessToken
+	c.TeamID = p.TeamID
+	c.TeamName = p.TeamName
+	c.UserID = p.UserID
+	c.UserName = p.UserName
+	c.UserEmail = p.UserEmail
+	c.Favorites = p.Favorites
+
+	return nil
+}
+
 func (c *Config) RemoveProfile(name string) error {
 	if c.Profiles == nil {
 		return fmt.Errorf("no profiles configured")
