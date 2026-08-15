@@ -14,8 +14,9 @@ import (
 	"github.com/kkz6/launchctl/cmd/servers"
 	"github.com/kkz6/launchctl/cmd/services"
 	"github.com/kkz6/launchctl/cmd/sites"
-	"github.com/kkz6/launchctl/cmd/ssl"
 	"github.com/kkz6/launchctl/cmd/sshkeys"
+	"github.com/kkz6/launchctl/cmd/ssl"
+	"github.com/kkz6/launchctl/cmd/tasks"
 	"github.com/kkz6/launchctl/cmd/teams"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/appstate"
@@ -32,6 +33,7 @@ var (
 	jsonOutput  bool
 	ciMode      bool
 	profileFlag string
+	apiURLFlag  string
 	cfg         *config.Config
 )
 
@@ -53,6 +55,9 @@ var rootCmd = &cobra.Command{
 		}
 
 		cfg.ApplyEnvOverrides()
+		if apiURLFlag != "" {
+			cfg.APIURL = apiURLFlag
+		}
 
 		appstate.SetConfig(cfg)
 
@@ -84,11 +89,13 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&ciMode, "ci", false, "CI/CD mode (non-interactive, requires flags/env vars)")
 	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Use a specific profile for this command")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the launchctl API URL")
 
 	rootCmd.AddCommand(servers.ServersCmd)
 	rootCmd.AddCommand(sites.SitesCmd)
 	rootCmd.AddCommand(deploy.DeployCmd)
 	rootCmd.AddCommand(teams.TeamsCmd)
+	rootCmd.AddCommand(tasks.TasksCmd)
 	rootCmd.AddCommand(env.EnvCmd)
 	rootCmd.AddCommand(services.ServicesCmd)
 	rootCmd.AddCommand(databases.DatabasesCmd)
@@ -112,4 +119,3 @@ func IsJSON() bool {
 func IsCI() bool {
 	return ciMode
 }
-

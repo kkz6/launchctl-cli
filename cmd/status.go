@@ -18,7 +18,14 @@ var statusCmd = &cobra.Command{
 		}
 
 		client := api.NewClient(cfg)
-		model := dashboard.NewModel(client, cfg.TeamName)
+		var ws *api.WSClient
+		if token, err := client.ExchangeToken(); err == nil {
+			ws, _ = api.NewWSClient(cfg, token)
+		}
+		if ws != nil {
+			defer ws.Close()
+		}
+		model := dashboard.NewModel(client, cfg.TeamName, ws)
 		p := tea.NewProgram(model, tea.WithAltScreen())
 
 		if _, err := p.Run(); err != nil {

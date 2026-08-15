@@ -81,7 +81,7 @@ func streamLiveLogs(client *api.Client, cfg *config.Config, token, serverID stri
 	}
 	defer ws.Close()
 
-	channel := fmt.Sprintf("team:%s", cfg.TeamID)
+	channel := fmt.Sprintf("team.%s", cfg.TeamID)
 	if err := ws.Subscribe(channel); err != nil {
 		return fmt.Errorf("failed to subscribe to events: %w", err)
 	}
@@ -94,6 +94,7 @@ func streamLiveLogs(client *api.Client, cfg *config.Config, token, serverID stri
 		Client:       client,
 		JWT:          token,
 		TeamID:       cfg.TeamID,
+		APIURL:       client.BaseURL(),
 		WS:           ws,
 	})
 	p := tea.NewProgram(model, tea.WithAltScreen())

@@ -185,7 +185,7 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 	}
 	defer ws.Close()
 
-	teamChannel := fmt.Sprintf("team:%s", cfg.TeamID)
+	teamChannel := fmt.Sprintf("team.%s", cfg.TeamID)
 	if err := ws.Subscribe(teamChannel); err != nil {
 		tui.ShowWarning("Could not subscribe to events")
 		tui.WaitForEnter()
@@ -200,6 +200,7 @@ func deploySite(client *api.Client, cfg *config.Config, serverID, serverName str
 		Client:       client,
 		JWT:          jwt,
 		TeamID:       cfg.TeamID,
+		APIURL:       client.BaseURL(),
 		WS:           ws,
 	})
 	p := tea.NewProgram(model, tea.WithAltScreen())

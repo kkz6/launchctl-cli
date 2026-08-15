@@ -12,7 +12,7 @@ const (
 	configFile = "config.json"
 )
 
-const APIURL = "https://launchctl.io"
+const DefaultAPIURL = "https://launchctl.io"
 
 type Favorite struct {
 	ServerID    string `json:"server_id"`
@@ -22,6 +22,7 @@ type Favorite struct {
 }
 
 type Profile struct {
+	APIURL      string     `json:"api_url,omitempty"`
 	AccessToken string     `json:"access_token,omitempty"`
 	TeamID      string     `json:"team_id,omitempty"`
 	TeamName    string     `json:"team_name,omitempty"`
@@ -37,6 +38,7 @@ type Config struct {
 
 	// Flat fields populated from the active profile for convenience.
 	// These are the fields all existing code uses.
+	APIURL      string     `json:"api_url,omitempty"`
 	AccessToken string     `json:"access_token,omitempty"`
 	TeamID      string     `json:"team_id,omitempty"`
 	TeamName    string     `json:"team_name,omitempty"`
@@ -82,6 +84,7 @@ func Load() (*Config, error) {
 	if cfg.ActiveProfile == "" && cfg.AccessToken != "" && len(cfg.Profiles) == 0 {
 		cfg.Profiles = map[string]*Profile{
 			"default": {
+				APIURL:      cfg.APIURL,
 				AccessToken: cfg.AccessToken,
 				TeamID:      cfg.TeamID,
 				TeamName:    cfg.TeamName,
@@ -97,6 +100,7 @@ func Load() (*Config, error) {
 	// If we have profiles, load the active one into flat fields
 	if cfg.ActiveProfile != "" && cfg.Profiles != nil {
 		if p, ok := cfg.Profiles[cfg.ActiveProfile]; ok {
+			cfg.APIURL = p.APIURL
 			cfg.AccessToken = p.AccessToken
 			cfg.TeamID = p.TeamID
 			cfg.TeamName = p.TeamName
@@ -114,6 +118,7 @@ func (c *Config) Save() error {
 	// Sync flat fields back to the active profile before saving
 	if c.ActiveProfile != "" && c.Profiles != nil {
 		if p, ok := c.Profiles[c.ActiveProfile]; ok {
+			p.APIURL = c.APIURL
 			p.AccessToken = c.AccessToken
 			p.TeamID = c.TeamID
 			p.TeamName = c.TeamName
@@ -161,6 +166,8 @@ func (c *Config) ClearAuth() {
 
 func (c *Config) Get(key string) string {
 	switch key {
+	case "api_url":
+		return c.EffectiveAPIURL()
 	case "access_token":
 		return c.AccessToken
 	case "team_id":
@@ -180,6 +187,8 @@ func (c *Config) Get(key string) string {
 
 func (c *Config) Set(key, value string) error {
 	switch key {
+	case "api_url":
+		c.APIURL = value
 	case "team_id":
 		c.TeamID = value
 	case "team_name":
@@ -221,6 +230,10 @@ func (c *Config) IsFavorite(siteID string) bool {
 }
 
 func (c *Config) ApplyEnvOverrides() {
+	if apiURL := os.Getenv("LAUNCHCTL_API_URL"); apiURL != "" {
+		c.APIURL = apiURL
+	}
+
 	if token := os.Getenv("LAUNCHCTL_TOKEN"); token != "" {
 		c.AccessToken = token
 	}
@@ -265,6 +278,7 @@ func (c *Config) UseProfile(name string) error {
 	}
 
 	c.ActiveProfile = name
+	c.APIURL = p.APIURL
 	c.AccessToken = p.AccessToken
 	c.TeamID = p.TeamID
 	c.TeamName = p.TeamName
@@ -289,6 +303,7 @@ func (c *Config) ActivateProfile(name string) error {
 	}
 
 	c.ActiveProfile = name
+	c.APIURL = p.APIURL
 	c.AccessToken = p.AccessToken
 	c.TeamID = p.TeamID
 	c.TeamName = p.TeamName
@@ -298,6 +313,16 @@ func (c *Config) ActivateProfile(name string) error {
 	c.Favorites = p.Favorites
 
 	return nil
+}
+
+// EffectiveAPIURL returns the configured API origin, falling back to the
+// hosted launchctl endpoint. Keeping the fallback here ensures HTTP and
+// WebSocket clients always resolve the same endpoint.
+func (c *Config) EffectiveAPIURL() string {
+	if c != nil && c.APIURL != "" {
+		return c.APIURL
+	}
+	return DefaultAPIURL
 }
 
 func (c *Config) RemoveProfile(name string) error {

@@ -69,7 +69,7 @@ var triggerCmd = &cobra.Command{
 		}
 		defer ws.Close()
 
-		channel := fmt.Sprintf("team:%s", cfg.TeamID)
+		channel := fmt.Sprintf("team.%s", cfg.TeamID)
 		if err := ws.Subscribe(channel); err != nil {
 			fmt.Println(tui.Warning.Render("Could not subscribe to events"))
 			return nil
@@ -83,6 +83,7 @@ var triggerCmd = &cobra.Command{
 			Client:       client,
 			JWT:          jwt,
 			TeamID:       cfg.TeamID,
+			APIURL:       client.BaseURL(),
 			WS:           ws,
 		})
 		p := tea.NewProgram(model, tea.WithAltScreen())

@@ -106,13 +106,22 @@ func Connect(cfg *config.Config, opts Options) error {
 }
 
 func buildURL(cfg *config.Config, opts Options) (string, error) {
-	baseURL := config.APIURL
-	baseURL = strings.Replace(baseURL, "https://", "wss://", 1)
-	baseURL = strings.Replace(baseURL, "http://", "ws://", 1)
-
-	u, err := url.Parse(baseURL + "/api/terminal/ws")
+	baseURL := strings.TrimRight(cfg.EffectiveAPIURL(), "/")
+	endpoint := "/api/terminal/ws"
+	if strings.HasSuffix(baseURL, "/api") {
+		endpoint = "/terminal/ws"
+	}
+	u, err := url.Parse(baseURL + endpoint)
 	if err != nil {
 		return "", err
+	}
+	switch u.Scheme {
+	case "https":
+		u.Scheme = "wss"
+	case "http":
+		u.Scheme = "ws"
+	default:
+		return "", fmt.Errorf("unsupported API URL scheme %q", u.Scheme)
 	}
 
 	q := u.Query()

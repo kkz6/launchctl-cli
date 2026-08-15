@@ -19,6 +19,8 @@ type refreshMsg struct {
 }
 
 type tickMsg struct{}
+type liveEventMsg struct{}
+type liveStateMsg struct{ state api.WSState }
 
 type Model struct {
 	client   *api.Client
@@ -29,26 +31,37 @@ type Model struct {
 	err      error
 	width    int
 	height   int
+	ws       *api.WSClient
+	wsState  api.WSState
 }
 
-func NewModel(client *api.Client, teamName string) Model {
+func NewModel(client *api.Client, teamName string, webSockets ...*api.WSClient) Model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(tui.Indigo)
 
-	return Model{
+	model := Model{
 		client:   client,
 		teamName: teamName,
 		spinner:  s,
 		loading:  true,
 	}
+	if len(webSockets) > 0 {
+		model.ws = webSockets[0]
+		model.wsState = api.WSState{State: api.StateReconnecting}
+	}
+	return model
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
+	commands := []tea.Cmd{
 		m.spinner.Tick,
 		m.fetchDashboard(),
-	)
+	}
+	if m.ws != nil {
+		commands = append(commands, waitLiveEvent(m.ws), waitLiveState(m.ws))
+	}
+	return tea.Batch(commands...)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -78,6 +91,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.loading = true
 		return m, m.fetchDashboard()
+
+	case liveEventMsg:
+		m.loading = true
+		return m, tea.Batch(m.fetchDashboard(), waitLiveEvent(m.ws))
+
+	case liveStateMsg:
+		m.wsState = msg.state
+		return m, waitLiveState(m.ws)
 
 	case spinner.TickMsg:
 		if m.loading {
@@ -127,7 +148,14 @@ func (m Model) View() string {
 
 	b.WriteString("\n")
 
-	statusLine := tui.Dim.Render("q quit  r refresh")
+	liveState := "polling"
+	if m.ws != nil {
+		liveState = string(m.wsState.State)
+		if liveState == "" {
+			liveState = "connecting"
+		}
+	}
+	statusLine := tui.Dim.Render(fmt.Sprintf("%s · q quit  r refresh", liveState))
 	if m.loading {
 		statusLine = m.spinner.View() + " refreshing...  " + statusLine
 	}
@@ -226,6 +254,21 @@ func scheduleRefresh() tea.Cmd {
 	return tea.Tick(30*time.Second, func(t time.Time) tea.Msg {
 		return tickMsg{}
 	})
+}
+
+func waitLiveEvent(ws *api.WSClient) tea.Cmd {
+	return func() tea.Msg {
+		if _, err := ws.ReadMessage(); err != nil {
+			return liveStateMsg{state: api.WSState{State: api.StateClosed, Err: err}}
+		}
+		return liveEventMsg{}
+	}
+}
+
+func waitLiveState(ws *api.WSClient) tea.Cmd {
+	return func() tea.Msg {
+		return liveStateMsg{state: <-ws.States()}
+	}
 }
 
 func truncate(s string, maxLen int) string {
