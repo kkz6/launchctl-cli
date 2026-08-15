@@ -1,134 +1,110 @@
-# launchctl
+# lctl
 
-A command-line tool for managing servers, sites, and deployments on the [launchctl](https://launchctl.dev) platform.
+`lctl` is the launchctl terminal client for servers, sites, deployments, and
+day-to-day infrastructure operations. It combines scriptable Cobra commands,
+Bubble Tea views that work cleanly in tmux, resilient WebSocket progress, and
+an authenticated raw API escape hatch for every backend feature.
 
-```
- _                   _       _   _
-| |__ _ _  _ _ _  __| |_  __| |_| |
-| / _` | || | ' \/ _| ' \/ _|  _| |
-|_\__,_|\_,_|_||_\__|_||_\__|\__|_|
-```
-
-## Features
-
-- **Server Management** — List, create, reboot, and SSH into servers
-- **Site Management** — Create and manage sites across your servers
-- **Zero-Downtime Deploys** — Trigger deployments with live log streaming via WebSocket
-- **Dashboard** — Full-screen terminal UI with server overview and recent activity
-- **Team Switching** — Manage and switch between teams
-- **JSON Output** — Machine-readable output for scripting with `--json`
-
-## Installation
-
-### From source
+## Install
 
 ```bash
-git clone https://github.com/kkz6/launchctl-cli.git
-cd launchctl-cli
-make build
+brew tap kkz6/tap
+brew install lctl
 ```
 
-The binary will be at `./bin/launchctl`.
-
-### Go install
+Or build the current source:
 
 ```bash
 go install github.com/kkz6/launchctl@latest
 ```
 
-## Quick Start
+Release archives include macOS and Linux builds for AMD64 and ARM64.
+
+## Quick start
 
 ```bash
-# Authenticate with your account
-launchctl login
-
-# View your dashboard
-launchctl status
-
-# List all servers
-launchctl servers list
-
-# Deploy a site
-launchctl deploy trigger --server <server-id> --site <site-id>
+lctl login
+lctl whoami
+lctl servers list
+lctl init
+lctl deploy trigger <site-id>
 ```
 
-## Commands
+Run `lctl` without a subcommand for the interactive navigator, or use
+`lctl status` for the live team dashboard.
 
-### Authentication
+## Command surface
 
-| Command | Description |
-|---------|-------------|
-| `launchctl login` | Interactive login with email and password |
-| `launchctl logout` | Log out and clear stored credentials |
+| Area | Commands |
+| --- | --- |
+| Account | `login`, `logout`, `whoami`, `auth`, `teams`, `config`, `switch` |
+| Servers | `servers list/show/reboot/ssh/metrics/watch` |
+| Sites | `sites list/show`, `env pull/push`, `logs`, `run` |
+| Deployments | `deploy trigger/list/show/logs/rollback` |
+| Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons` |
+| Live work | `status`, `events`, `tasks list/watch` |
+| Automation | `init`, `api`, `completion`, `--json`, `--ci` |
 
-### Servers
+Use `lctl <command> --help` for the installed version's exact flags.
 
-| Command | Description |
-|---------|-------------|
-| `launchctl servers list` | List all servers |
-| `launchctl servers show <id>` | Show server details |
-| `launchctl servers create` | Interactive server creation |
-| `launchctl servers reboot <id>` | Reboot a server |
-| `launchctl servers ssh <id>` | SSH into a server |
-| `launchctl servers metrics <id>` | Show latest server metrics |
-
-### Sites
-
-| Command | Description |
-|---------|-------------|
-| `launchctl sites list --server <id>` | List sites on a server |
-| `launchctl sites show <id> --server <id>` | Show site details |
-| `launchctl sites create --server <id>` | Interactive site creation |
-
-### Deployments
-
-| Command | Description |
-|---------|-------------|
-| `launchctl deploy trigger --server <id> --site <id>` | Deploy with live log streaming |
-| `launchctl deploy list --server <id> --site <id>` | List deployment history |
-| `launchctl deploy show <id> --server <id> --site <id>` | Show deployment details |
-| `launchctl deploy rollback --server <id> --site <id>` | Rollback to previous release |
-
-### Teams
-
-| Command | Description |
-|---------|-------------|
-| `launchctl teams list` | List your teams |
-| `launchctl teams switch` | Interactive team switcher |
-| `launchctl teams members` | List team members |
-
-### Dashboard
+## Live progress
 
 ```bash
-launchctl status
+lctl servers watch <server-id>
+lctl tasks watch <task-id> --server <server-id>
+lctl events --filter 'deployment.*'
+lctl events --json | jq -c 'select(.event == "task.failed")'
 ```
 
-Full-screen TUI with server overview and recent deployments. Auto-refreshes every 30 seconds. Press `r` to refresh manually, `q` to quit.
+The shared WebSocket manager sends heartbeats, reconnects with exponential
+backoff, and restores authorized subscriptions after a disconnect. Interactive
+views expose connection state, pause/clear/scroll controls, and clean alternate
+screen handling. The dashboard reacts to events immediately and retains a
+30-second REST reconciliation interval.
 
-### Configuration
+## Complete API access
+
+High-level commands cover common human workflows. New backend modules are
+available immediately through the authenticated client:
 
 ```bash
-# Show current config
-launchctl config show
-
-# Set a config value
-launchctl config set api_url https://api.launchctl.dev
+lctl api GET /api/servers/<server-id>/backups
+lctl api GET /api/servers/<server-id>/docker/projects
+lctl api POST /api/scripts --data @script.json
 ```
 
-Config is stored at `~/.config/launchctl/config.json`.
+`lctl api` applies the active token, team, profile, API origin, safe-read
+retries, response bounds, and typed errors. Mutation requests are never retried.
 
-## Global Flags
+## Profiles and self-hosting
 
-| Flag | Description |
-|------|-------------|
-| `--json` | Output in JSON format |
-| `--api-url` | Override the API URL |
+```bash
+lctl config profiles add staging
+lctl config profiles use staging
+lctl config set api_url https://launch.example.com
+lctl --profile staging servers list
+```
 
-## Requirements
+Configuration lives at `~/.config/launchctl/config.json`; project defaults live
+in `.launchctl.yml`. Runtime environment variables are:
 
-- Go 1.24+
-- A [launchctl](https://launchctl.dev) account
+- `LAUNCHCTL_API_URL`
+- `LAUNCHCTL_TOKEN`
+- `LAUNCHCTL_TEAM_ID`
+
+`--api-url` overrides the environment and profile for one invocation.
+
+## Development
+
+```bash
+go test -race ./...
+go vet ./...
+go build ./...
+```
+
+See [the CLI reference](docs/cli-reference.md) and the
+[production-readiness design](docs/plans/2026-08-14-cli-production-readiness.md).
 
 ## License
 
-Private — All rights reserved.
+Private — all rights reserved.

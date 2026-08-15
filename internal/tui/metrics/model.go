@@ -330,7 +330,7 @@ func listenWS(ws *api.MetricsWSClient) tea.Cmd {
 			return metricsMsg{data: met}
 
 		case "error":
-			return errMsg{err: fmt.Errorf(evt.Message)}
+			return errMsg{err: fmt.Errorf("%s", evt.Message)}
 
 		default:
 			return listenWS(ws)()

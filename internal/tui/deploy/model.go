@@ -78,6 +78,7 @@ type Opts struct {
 	Client       *api.Client
 	JWT          string
 	TeamID       string
+	APIURL       string
 	WS           *api.WSClient
 }
 
@@ -97,6 +98,7 @@ type Model struct {
 	client       *api.Client
 	jwt          string
 	teamID       string
+	apiURL       string
 	serverID     string
 	siteID       string
 	deploymentID string
@@ -119,6 +121,7 @@ func NewModel(opts Opts) Model {
 		client:       opts.Client,
 		jwt:          opts.JWT,
 		teamID:       opts.TeamID,
+		apiURL:       opts.APIURL,
 		serverID:     opts.ServerID,
 		siteID:       opts.SiteID,
 		deploymentID: opts.DeploymentID,
@@ -128,7 +131,7 @@ func NewModel(opts Opts) Model {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
-		listenEventWS(m.ws),
+		listenEventWS(m.ws, m.deploymentID),
 		pollForTaskID(m.client, m.serverID, m.siteID, m.deploymentID),
 	)
 }
@@ -162,7 +165,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case taskIDFoundMsg:
 		m.taskID = msg.taskID
-		cmds = append(cmds, connectLogsWS(m.jwt, m.teamID, m.serverID, msg.taskID))
+		cmds = append(cmds, connectLogsWS(m.jwt, m.teamID, m.serverID, msg.taskID, m.apiURL))
 
 	case logsWSConnectedMsg:
 		m.logsWS = msg.ws
@@ -183,7 +186,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = msg.status
 		m.step = msg.step
 		if !m.done {
-			cmds = append(cmds, listenEventWS(m.ws))
+			cmds = append(cmds, listenEventWS(m.ws, m.deploymentID))
 		}
 
 	case doneMsg:
@@ -278,7 +281,7 @@ func (m Model) View() string {
 	return b.String()
 }
 
-func listenEventWS(ws *api.WSClient) tea.Cmd {
+func listenEventWS(ws *api.WSClient, deploymentID string) tea.Cmd {
 	return func() tea.Msg {
 		msg, err := ws.ReadMessage()
 		if err != nil {
@@ -289,26 +292,34 @@ func listenEventWS(ws *api.WSClient) tea.Cmd {
 		case "deployment.progress":
 			var event api.DeploymentLogEvent
 			if err := parseEventData(msg.Data, &event); err == nil {
+				if event.DeploymentID != deploymentID {
+					return listenEventWS(ws, deploymentID)()
+				}
 				return statusMsg{status: event.Status, step: event.Step}
 			}
 
-		case "deployment.finished":
-			return doneMsg{status: "finished"}
-		case "deployment.failed":
-			return doneMsg{status: "failed"}
-		case "deployment.timeout":
-			return doneMsg{status: "timeout"}
-		case "deployment.cancelled":
-			return doneMsg{status: "cancelled"}
-
-		case "deployment.started":
+		case "deployment.finished", "deployment.failed", "deployment.timeout", "deployment.cancelled", "deployment.started":
 			var event api.DeploymentLogEvent
 			if err := parseEventData(msg.Data, &event); err == nil {
-				return statusMsg{status: "deploying", step: event.Step}
+				if event.DeploymentID != deploymentID {
+					return listenEventWS(ws, deploymentID)()
+				}
+				switch msg.Event {
+				case "deployment.started":
+					return statusMsg{status: "deploying", step: event.Step}
+				case "deployment.finished":
+					return doneMsg{status: "finished"}
+				case "deployment.failed":
+					return doneMsg{status: "failed"}
+				case "deployment.timeout":
+					return doneMsg{status: "timeout"}
+				default:
+					return doneMsg{status: "cancelled"}
+				}
 			}
 		}
 
-		return listenEventWS(ws)()
+		return listenEventWS(ws, deploymentID)()
 	}
 }
 
@@ -329,9 +340,9 @@ func pollForTaskID(client *api.Client, serverID, siteID, deploymentID string) te
 	}
 }
 
-func connectLogsWS(jwt, teamID, serverID, taskID string) tea.Cmd {
+func connectLogsWS(jwt, teamID, serverID, taskID, apiURL string) tea.Cmd {
 	return func() tea.Msg {
-		ws, err := api.NewLogsWSClientDirect(jwt, teamID, serverID, "task", taskID)
+		ws, err := api.NewLogsWSClientDirect(jwt, teamID, serverID, "task", taskID, apiURL)
 		if err != nil {
 			return taskLogEndMsg{}
 		}

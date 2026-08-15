@@ -147,6 +147,66 @@ lctl servers metrics abc123 --watch
 |------|-------------|
 | `-w, --watch` | Stream metrics in real-time |
 
+### `lctl servers watch <id>`
+
+Follow provisioning and lifecycle events in a reconnecting tmux-friendly
+console. Add `--json` to emit NDJSON and exit on a terminal provision event.
+
+```bash
+lctl servers watch <server-id>
+lctl servers watch <server-id> --json
+```
+
+---
+
+## Tasks and Events
+
+### `lctl tasks list`
+
+```bash
+lctl tasks list --server <server-id>
+lctl tasks list --server <server-id> --json
+```
+
+### `lctl tasks watch <task-id>`
+
+Show stored task output, then follow output, progress, markers, and status over
+the authorized `task.<id>` WebSocket channel.
+
+```bash
+lctl tasks watch <task-id> --server <server-id>
+```
+
+### `lctl events`
+
+Open the team event console. Event filters use shell-style globs; additional
+resource channels may be repeated.
+
+```bash
+lctl events --filter 'deployment.*' --filter 'task.*'
+lctl events --channel server.<server-id> --json
+```
+
+Interactive keys: `space` pause, `c` clear, arrow/Page keys scroll, `q` quit.
+
+---
+
+## Authenticated API
+
+### `lctl api <method> <path>`
+
+Call any known backend endpoint with the active token, team, profile, and API
+origin. Paths must begin with `/api`; request bodies must be JSON.
+
+```bash
+lctl api GET /api/servers/<server-id>/backups
+lctl api GET /api/servers/<server-id>/docker/projects
+lctl api POST /api/scripts --data '{"name":"health-check"}'
+lctl api PATCH /api/example --data @request.json
+```
+
+Safe reads retry transient failures. Mutation methods are never replayed.
+
 ---
 
 ## Sites

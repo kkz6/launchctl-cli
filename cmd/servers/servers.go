@@ -16,4 +16,5 @@ func init() {
 	ServersCmd.AddCommand(rebootCmd)
 	ServersCmd.AddCommand(sshCmd)
 	ServersCmd.AddCommand(metricsCmd)
+	ServersCmd.AddCommand(watchCmd)
 }
