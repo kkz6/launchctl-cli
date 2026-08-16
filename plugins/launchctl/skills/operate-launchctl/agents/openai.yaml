@@ -1,0 +1,4 @@
+interface:
+  display_name: "Operate launchctl"
+  short_description: "Manage launchctl infrastructure safely"
+  default_prompt: "Use $operate-launchctl to inspect or manage my launchctl infrastructure safely."

@@ -20,6 +20,32 @@ go install github.com/kkz6/launchctl@latest
 
 Release archives include macOS and Linux builds for AMD64 and ARM64.
 
+### Install the AI skill
+
+The CLI contains the same `operate-launchctl` skill published through the
+repository's Codex plugin. Choose one installation method to avoid loading the
+same skill twice.
+
+For an offline installation managed by the CLI:
+
+```bash
+lctl ai install
+lctl ai doctor
+```
+
+After upgrading `lctl`, run `lctl ai update`. The installer writes atomically,
+detects local changes, and never replaces an unmanaged skill directory.
+
+For the versioned Codex marketplace plugin:
+
+```bash
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.1
+codex plugin add launchctl@launchctl
+```
+
+Restart Codex if the skill does not appear immediately, then invoke it with
+`$operate-launchctl` or ask naturally for help operating launchctl resources.
+
 ## Quick start
 
 ```bash
@@ -44,6 +70,7 @@ Run `lctl` without a subcommand for the interactive navigator, or use
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons` |
 | Live work | `status`, `events`, `tasks list/watch` |
 | Automation | `init`, `api`, `completion`, `--json`, `--ci` |
+| AI | `ai install/doctor/update/uninstall`, `$operate-launchctl` |
 
 Use `lctl <command> --help` for the installed version's exact flags.
 

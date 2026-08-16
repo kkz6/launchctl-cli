@@ -20,6 +20,22 @@ jobs:
         with:
           go-version-file: go.mod
 
+      - name: Verify CLI and plugin release metadata
+        shell: bash
+        run: |
+          release_version="${GITHUB_REF_NAME#v}"
+          plugin_version="$(python3 -c 'import json; print(json.load(open("plugins/launchctl/.codex-plugin/plugin.json"))["version"])')"
+          if [[ "$plugin_version" != "$release_version" ]]; then
+            echo "plugin version $plugin_version does not match release $release_version" >&2
+            exit 1
+          fi
+
+      - name: Test distribution
+        run: |
+          go test -race ./...
+          go vet ./...
+          go build ./...
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"

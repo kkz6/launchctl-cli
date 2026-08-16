@@ -34,6 +34,46 @@ lctl deploy trigger <site-id>
 
 ---
 
+## AI Skill
+
+The `operate-launchctl` skill teaches Codex how to select safe `lctl` commands,
+follow WebSocket progress, reconcile asynchronous work, and avoid exposing
+credentials. Use either the CLI-managed standalone skill or the repository
+plugin, not both.
+
+### CLI-managed installation
+
+```bash
+lctl ai install
+lctl ai doctor
+lctl ai update
+lctl ai uninstall
+```
+
+The default destination is `$CODEX_HOME/skills/operate-launchctl`, falling back
+to `~/.codex/skills/operate-launchctl`. Use `--codex-home <path>` to target a
+different Codex home. `doctor` and all mutations support the global `--json`
+flag.
+
+`update` and `uninstall` refuse to replace locally modified managed files unless
+`--force` is provided. Unmanaged directories and symlink destinations are never
+overwritten or removed.
+
+### Marketplace plugin
+
+Install the plugin from the GitHub repository at the matching CLI release tag:
+
+```bash
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.1
+codex plugin add launchctl@launchctl
+```
+
+Start a new Codex task if the newly installed skill is not visible in the
+current task. Invoke it explicitly with `$operate-launchctl`, or let Codex select
+it when the request concerns launchctl infrastructure.
+
+---
+
 ## Authentication
 
 ### `lctl login`

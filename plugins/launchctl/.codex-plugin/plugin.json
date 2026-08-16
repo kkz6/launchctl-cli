@@ -1,0 +1,36 @@
+{
+  "name": "launchctl",
+  "version": "0.2.1",
+  "description": "Operate launchctl infrastructure safely through the lctl CLI.",
+  "author": {
+    "name": "kkz6",
+    "url": "https://github.com/kkz6"
+  },
+  "homepage": "https://launchctl.io/docs/cli",
+  "repository": "https://github.com/kkz6/launchctl-cli",
+  "keywords": [
+    "launchctl",
+    "infrastructure",
+    "deployments",
+    "operations"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "launchctl",
+    "shortDescription": "Manage launchctl infrastructure with AI",
+    "longDescription": "Inspect, troubleshoot, deploy, and safely manage launchctl infrastructure through the authenticated lctl command-line interface.",
+    "developerName": "kkz6",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write",
+      "Interactive"
+    ],
+    "websiteURL": "https://launchctl.io/docs/cli",
+    "defaultPrompt": [
+      "Use launchctl to inspect my infrastructure.",
+      "Diagnose my latest failed deployment.",
+      "Watch active launchctl tasks and report progress."
+    ]
+  }
+}

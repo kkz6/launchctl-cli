@@ -1,0 +1,20 @@
+{
+  "name": "launchctl",
+  "interface": {
+    "displayName": "Launchctl"
+  },
+  "plugins": [
+    {
+      "name": "launchctl",
+      "source": {
+        "source": "local",
+        "path": "./plugins/launchctl"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

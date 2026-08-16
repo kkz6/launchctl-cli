@@ -42,6 +42,12 @@ var rootCmd = &cobra.Command{
 	Short: "CLI for managing launchctl servers, sites, and deployments",
 	Long:  "lctl is a command-line tool for managing your launchctl servers, sites, and deployments.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if commandSkipsConfig(cmd) {
+			cfg = config.DefaultConfig()
+			appstate.SetConfig(cfg)
+			return nil
+		}
+
 		var err error
 		cfg, err = config.Load()
 		if err != nil {
@@ -77,6 +83,15 @@ var rootCmd = &cobra.Command{
 			cmd.Help()
 		}
 	},
+}
+
+func commandSkipsConfig(cmd *cobra.Command) bool {
+	for current := cmd; current != nil; current = current.Parent() {
+		if current.Annotations["skipConfig"] == "true" {
+			return true
+		}
+	}
+	return false
 }
 
 func Execute() {

@@ -47,6 +47,11 @@ _release:
 		patch) PATCH=$$((PATCH + 1)) ;; \
 	esac; \
 	NEXT="v$$MAJOR.$$MINOR.$$PATCH"; \
+	PLUGIN_VERSION=$$(python3 -c 'import json; print(json.load(open("plugins/launchctl/.codex-plugin/plugin.json"))["version"])'); \
+	if [ "$$PLUGIN_VERSION" != "$${NEXT#v}" ]; then \
+		echo "Plugin version $$PLUGIN_VERSION must match $$NEXT before release."; \
+		exit 1; \
+	fi; \
 	echo "$(CURRENT_TAG) → $$NEXT"; \
 	echo ""; \
 	git log --oneline $(CURRENT_TAG)..HEAD 2>/dev/null || echo "  (first release)"; \
