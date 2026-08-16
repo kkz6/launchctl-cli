@@ -8,11 +8,11 @@ func TestEffectiveAPIURLAndEnvironmentOverrides(t *testing.T) {
 		t.Fatalf("default API URL = %q", got)
 	}
 
-	t.Setenv("LAUNCHCTL_API_URL", "https://self-hosted.example/api")
+	t.Setenv("LAUNCHCTL_API_URL", "https://staging.launchctl.example/api")
 	t.Setenv("LAUNCHCTL_TOKEN", "token")
 	t.Setenv("LAUNCHCTL_TEAM_ID", "team-a")
 	cfg.ApplyEnvOverrides()
-	if cfg.EffectiveAPIURL() != "https://self-hosted.example/api" || cfg.AccessToken != "token" || cfg.TeamID != "team-a" {
+	if cfg.EffectiveAPIURL() != "https://staging.launchctl.example/api" || cfg.AccessToken != "token" || cfg.TeamID != "team-a" {
 		t.Fatalf("environment overrides not applied: %#v", cfg)
 	}
 }

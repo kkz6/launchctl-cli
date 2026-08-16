@@ -15,7 +15,7 @@ and render cleanly in tmux, SSH sessions, and ordinary terminals.
 
 | Area | High-level commands | Live workflow |
 | --- | --- | --- |
-| Authentication and context | `login`, `logout`, `whoami`, `teams`, `config profiles`, `switch` | Profile-specific hosted or self-hosted API origin |
+| Authentication and context | `login`, `logout`, `whoami`, `teams`, `config profiles`, `switch` | Profile-specific hosted or approved development API origin |
 | Servers | `servers list/show/reboot/ssh/metrics` | `servers watch <id>` provisioning console |
 | Sites and deployments | `sites list/show`, `deploy trigger/list/show/logs/rollback` | Deployment progress and task output |
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons`, `logs` | Resource events through `events` |
@@ -74,8 +74,10 @@ Highest to lowest:
 3. active profile in `~/.config/launchctl/config.json`
 4. `https://launchctl.io`
 
-API origins are stored per profile so hosted, staging, and self-hosted accounts
-can coexist without separate config files.
+API origins are stored per profile so production and approved launchctl
+development or staging accounts can coexist without separate config files.
+This override is not a supported self-hosting interface; launchctl is currently
+a hosted service.
 
 ## Stability and security gates
 

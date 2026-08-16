@@ -13,7 +13,7 @@ version. The global flags are `--json`, `--ci`, `--profile`, and `--api-url`.
 | List/switch teams | `lctl teams list`, `lctl teams switch` |
 | List/add/use profiles | `lctl config profiles`, `config profiles add/use` |
 | One-command profile | `lctl --profile <name> …` |
-| Set self-host origin | `lctl config set api_url <origin>` |
+| Set an approved development API origin | `lctl config set api_url <origin>` |
 | Bind repository | `lctl init` |
 | Live dashboard | `lctl status` |
 

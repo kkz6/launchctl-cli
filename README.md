@@ -5,6 +5,9 @@ day-to-day infrastructure operations. It combines scriptable Cobra commands,
 Bubble Tea views that work cleanly in tmux, resilient WebSocket progress, and
 an authenticated raw API escape hatch for every backend feature.
 
+launchctl is currently a hosted service. The CLI does not install or operate a
+self-managed launchctl control plane.
+
 ## Install
 
 ```bash
@@ -39,7 +42,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.1
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.2
 codex plugin add launchctl@launchctl
 ```
 
@@ -103,12 +106,11 @@ lctl api POST /api/scripts --data @script.json
 `lctl api` applies the active token, team, profile, API origin, safe-read
 retries, response bounds, and typed errors. Mutation requests are never retried.
 
-## Profiles and self-hosting
+## Profiles and CI
 
 ```bash
 lctl config profiles add staging
 lctl config profiles use staging
-lctl config set api_url https://launch.example.com
 lctl --profile staging servers list
 ```
 
@@ -119,7 +121,9 @@ in `.launchctl.yml`. Runtime environment variables are:
 - `LAUNCHCTL_TOKEN`
 - `LAUNCHCTL_TEAM_ID`
 
-`--api-url` overrides the environment and profile for one invocation.
+`--api-url` overrides the environment and profile for one invocation. API-origin
+overrides are intended for launchctl development and explicitly assigned test
+or staging environments; they are not a supported self-hosting interface.
 
 ## Development
 

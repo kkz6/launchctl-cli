@@ -56,3 +56,20 @@ func TestSkillMetadataNamesOperateLaunchctl(t *testing.T) {
 		t.Fatal("SKILL.md is missing its trigger description")
 	}
 }
+
+func TestEmbeddedSkillTreatsLaunchctlAsHostedOnly(t *testing.T) {
+	data, err := fs.ReadFile(SkillFS, "skills/operate-launchctl/SKILL.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(data)
+	for _, want := range []string{
+		"launchctl is hosted-only",
+		"approved launchctl development or staging origin",
+		"never invent self-hosting instructions",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("hosted-only guidance is missing %q", want)
+		}
+	}
+}

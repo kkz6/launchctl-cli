@@ -84,8 +84,9 @@ lctl deploy trigger "$SITE_ID" \
   --ci --wait --timeout 600
 ```
 
-Require `LAUNCHCTL_TOKEN` and `LAUNCHCTL_TEAM_ID`; use
-`LAUNCHCTL_API_URL` for self-hosting. Never echo these values.
+Require `LAUNCHCTL_TOKEN` and `LAUNCHCTL_TEAM_ID`. launchctl is hosted-only.
+Use `LAUNCHCTL_API_URL` only for an explicitly provided, approved launchctl development or staging origin.
+Never echo these values and never invent self-hosting instructions.
 
 ### Deploy a Docker application
 

@@ -104,7 +104,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false, "Output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&ciMode, "ci", false, "CI/CD mode (non-interactive, requires flags/env vars)")
 	rootCmd.PersistentFlags().StringVar(&profileFlag, "profile", "", "Use a specific profile for this command")
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the launchctl API URL")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override the launchctl API URL for development or testing")
 
 	rootCmd.AddCommand(servers.ServersCmd)
 	rootCmd.AddCommand(sites.SitesCmd)
