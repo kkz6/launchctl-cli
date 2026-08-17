@@ -1,95 +1,189 @@
 package splash
 
 import (
-	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/term"
+	"github.com/muesli/termenv"
 )
 
-// 3-row uppercase glyphs using Unicode half-block characters.
-// Follows the Charm Crush wordmark style.
-var glyphs = map[rune][3]string{
-	'L': {"█     ", "█     ", "▀▀▀▀▀ "},
-	'A': {"▄▀▀▀▄ ", "█▀▀▀█ ", "▀   ▀ "},
-	'U': {"█   █ ", "█   █ ", " ▀▀▀  "},
-	'N': {"█▄  █ ", "█ ▀▄█ ", "▀   ▀ "},
-	'C': {"▄▀▀▀▀ ", "█     ", " ▀▀▀▀ "},
-	'H': {"█   █ ", "█▀▀▀█ ", "▀   ▀ "},
-	'T': {"▀▀█▀▀ ", "  █   ", "  ▀   "},
+const (
+	// Description is deliberately short so the brand header remains useful in
+	// narrow terminal and tmux panes.
+	Description             = "Deploy, operate, and monitor from one terminal."
+	defaultWidth            = 80
+	minimumDescriptionWidth = 28
+)
+
+// Options controls the deterministic parts of the splash renderer. Keeping
+// terminal detection outside Render makes the output easy to preview and test.
+type Options struct {
+	Width         int
+	Color         bool
+	UpdateVersion string
 }
 
-func lerp(a, b, t float64) float64 {
-	return a + (b-a)*t
-}
+// Render returns a compact, persistent product header. It never probes the
+// terminal background and never sleeps or writes to the terminal directly.
+func Render(version string, options Options) string {
+	width := options.Width
+	if width < 1 {
+		width = defaultWidth
+	}
 
-func gradientColor(r1, g1, b1, r2, g2, b2 int, t float64) lipgloss.Color {
-	r := int(lerp(float64(r1), float64(r2), t))
-	g := int(lerp(float64(g1), float64(g2), t))
-	b := int(lerp(float64(b1), float64(b2), t))
+	renderer := lipgloss.NewRenderer(io.Discard)
+	profile := termenv.Ascii
+	if options.Color {
+		// Basic ANSI colors follow the user's terminal theme and work in tmux.
+		profile = termenv.ANSI
+	}
+	renderer.SetColorProfile(profile)
 
-	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x", r, g, b))
-}
+	brandStyle := renderer.NewStyle().
+		Bold(true).
+		Foreground(lipgloss.Color("2"))
+	metaStyle := renderer.NewStyle().Foreground(lipgloss.Color("8"))
+	updateStyle := renderer.NewStyle().Foreground(lipgloss.Color("3"))
 
-func Render(version string) string {
-	isDark := lipgloss.HasDarkBackground()
+	product := "launchctl"
+	if ansi.StringWidth(product) > width {
+		product = "lctl"
+	}
+	version = displayVersion(version)
 
-	// Gradient: indigo → violet
-	var r1, g1, b1, r2, g2, b2 int
-	if isDark {
-		r1, g1, b1 = 0x81, 0x8C, 0xF8 // #818CF8
-		r2, g2, b2 = 0xC0, 0x84, 0xFC // #C084FC
+	var lines []string
+	if ansi.StringWidth(product)+2+ansi.StringWidth(version) <= width {
+		lines = append(lines, brandStyle.Render(product)+"  "+metaStyle.Render(version))
 	} else {
-		r1, g1, b1 = 0x4F, 0x46, 0xE5 // #4F46E5
-		r2, g2, b2 = 0x7C, 0x3A, 0xED // #7C3AED
+		lines = append(lines, brandStyle.Render(ansi.Truncate(product, width, "")))
+		lines = append(lines, metaStyle.Render(ansi.Truncate(version, width, "")))
 	}
 
-	word := "LAUNCHCTL"
+	if width >= minimumDescriptionWidth {
+		for _, line := range wrappedLines(Description, width) {
+			lines = append(lines, metaStyle.Render(line))
+		}
+	}
+	if updateVersion := displayUpdateVersion(options.UpdateVersion); updateVersion != "" {
+		notice := "Update available: " + updateVersion + " · run lctl update"
+		if width < 24 {
+			notice = "Update: " + updateVersion
+		}
+		for _, line := range wrappedLines(notice, width) {
+			lines = append(lines, updateStyle.Render(line))
+		}
+	}
 
-	var rows [3]string
-	for row := 0; row < 3; row++ {
-		var parts []string
-		for _, ch := range word {
-			if g, ok := glyphs[ch]; ok {
-				parts = append(parts, g[row])
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func wrappedLines(value string, width int) []string {
+	var lines []string
+	current := ""
+	flush := func() {
+		if current != "" {
+			lines = append(lines, current)
+			current = ""
+		}
+	}
+
+	for _, word := range strings.Fields(value) {
+		chunks := strings.Split(ansi.Hardwrap(word, width, false), "\n")
+		for index, chunk := range chunks {
+			if current == "" {
+				current = chunk
+			} else if ansi.StringWidth(current)+1+ansi.StringWidth(chunk) <= width {
+				current += " " + chunk
+			} else {
+				flush()
+				current = chunk
+			}
+
+			// Every non-final chunk filled a line while breaking an oversized
+			// word, so the next chunk must begin on a fresh line.
+			if index < len(chunks)-1 {
+				flush()
 			}
 		}
-		rows[row] = strings.Join(parts, "")
 	}
+	flush()
+	return lines
+}
 
-	var b strings.Builder
-	b.WriteString("\n\n\n")
+// ShouldRender reports whether decorative root output is appropriate. Bare
+// commands in scripts and CI remain plain and non-interactive.
+func ShouldRender(out *os.File, ciMode, jsonOutput bool) bool {
+	isTTY := out != nil && term.IsTerminal(out.Fd())
+	return shouldRender(isTTY, ciMode, jsonOutput, os.Getenv("TERM"))
+}
 
-	for _, row := range rows {
-		runes := []rune(row)
-		width := len(runes)
-		b.WriteString("  ")
+// IsInteractive reports whether both sides of an interactive TUI are attached
+// to a terminal. This prevents a bare command with redirected input from
+// opening navigation and waiting for keys that can never arrive.
+func IsInteractive(in, out *os.File, ciMode, jsonOutput bool) bool {
+	inputTTY := in != nil && term.IsTerminal(in.Fd())
+	outputTTY := out != nil && term.IsTerminal(out.Fd())
+	return isInteractive(inputTTY, outputTTY, ciMode, jsonOutput, os.Getenv("TERM"))
+}
 
-		for i, r := range runes {
-			if r == ' ' {
-				b.WriteRune(' ')
-				continue
-			}
-
-			t := 0.0
-			if width > 1 {
-				t = float64(i) / float64(width-1)
-			}
-
-			color := gradientColor(r1, g1, b1, r2, g2, b2, t)
-			style := lipgloss.NewStyle().
-				Bold(true).
-				Foreground(color)
-			b.WriteString(style.Render(string(r)))
+// TerminalOptions detects only terminal capabilities that are available
+// immediately. In particular, it does not issue an OSC background query.
+func TerminalOptions(out *os.File) Options {
+	isTTY := out != nil && term.IsTerminal(out.Fd())
+	width := defaultWidth
+	if isTTY {
+		if detected, _, err := term.GetSize(out.Fd()); err == nil && detected > 0 {
+			width = detected
 		}
-
-		b.WriteString("\n")
 	}
 
-	b.WriteString("  Server management & deployment toolkit")
-	b.WriteString("\n\n")
-	b.WriteString("  launchctl.io  v" + version)
-	b.WriteString("\n")
+	_, noColor := os.LookupEnv("NO_COLOR")
+	return terminalOptions(isTTY, width, os.Getenv("TERM"), noColor, os.Getenv("CLICOLOR"))
+}
 
-	return b.String()
+func displayVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "dev"
+	}
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
+}
+
+func displayUpdateVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" || version == "dev" {
+		return ""
+	}
+	if strings.HasPrefix(version, "v") {
+		return version
+	}
+	return "v" + version
+}
+
+func shouldRender(isTTY, ciMode, jsonOutput bool, termName string) bool {
+	return isTTY && !ciMode && !jsonOutput && !strings.EqualFold(termName, "dumb")
+}
+
+func isInteractive(inputTTY, outputTTY, ciMode, jsonOutput bool, termName string) bool {
+	return inputTTY && shouldRender(outputTTY, ciMode, jsonOutput, termName)
+}
+
+func terminalOptions(isTTY bool, width int, termName string, noColor bool, cliColor string) Options {
+	if width < 1 {
+		width = defaultWidth
+	}
+
+	color := isTTY &&
+		!noColor &&
+		cliColor != "0" &&
+		!strings.EqualFold(termName, "dumb")
+
+	return Options{Width: width, Color: color}
 }

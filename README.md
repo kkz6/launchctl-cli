@@ -11,17 +11,21 @@ self-managed launchctl control plane.
 ## Install
 
 ```bash
-brew tap kkz6/tap
-brew install lctl
+brew install kkz6/tap/lctl
 ```
 
-Or build the current source:
+Using the fully qualified formula trusts only `lctl`, rather than every current
+and future package in the tap. If an older, separately tapped installation asks
+for trust, grant it to the formula and retry:
 
 ```bash
-go install github.com/kkz6/launchctl@latest
+brew trust --formula kkz6/tap/lctl
+brew install kkz6/tap/lctl
 ```
 
-Release archives include macOS and Linux builds for AMD64 and ARM64.
+Release archives include macOS and Linux builds for AMD64 and ARM64. Repository
+contributors can build the current checkout with `go build -o lctl .`; the
+private source repository is not a public `go install` distribution channel.
 
 ### Install the AI skill
 
@@ -42,7 +46,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.2
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.3
 codex plugin add launchctl@launchctl
 ```
 
@@ -62,6 +66,27 @@ lctl deploy trigger <site-id>
 Run `lctl` without a subcommand for the interactive navigator, or use
 `lctl status` for the live team dashboard.
 
+## Keep the CLI current
+
+```bash
+lctl update --check
+lctl update
+```
+
+`lctl update` verifies the release archive and then uses the installation's
+original update path. Homebrew installations run
+`brew upgrade kkz6/tap/lctl`; direct binary installations are replaced
+atomically after checksum and staged-version validation. Use
+`lctl update --check --json` for automation and `lctl update --force` to
+reinstall the latest release. The `upgrade` command is an alias for `update`.
+
+The interactive header reads a local update cache and shows
+`Update available: vX.Y.Z` without delaying startup. A detached check refreshes
+successful results at most once every 24 hours; failures are retried after one
+hour. Set `LAUNCHCTL_NO_UPDATE_CHECK=1` to disable passive checks and notices.
+Explicit `lctl update` commands still work. If the CLI manages your AI skill,
+run `lctl ai update` after updating `lctl` to install the newly bundled files.
+
 ## Command surface
 
 | Area | Commands |
@@ -72,6 +97,7 @@ Run `lctl` without a subcommand for the interactive navigator, or use
 | Deployments | `deploy trigger/list/show/logs/rollback` |
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons` |
 | Live work | `status`, `events`, `tasks list/watch` |
+| CLI lifecycle | `version`, `update`, `update --check` |
 | Automation | `init`, `api`, `completion`, `--json`, `--ci` |
 | AI | `ai install/doctor/update/uninstall`, `$operate-launchctl` |
 
@@ -120,6 +146,7 @@ in `.launchctl.yml`. Runtime environment variables are:
 - `LAUNCHCTL_API_URL`
 - `LAUNCHCTL_TOKEN`
 - `LAUNCHCTL_TEAM_ID`
+- `LAUNCHCTL_NO_UPDATE_CHECK` (disables passive update checks and notices)
 
 `--api-url` overrides the environment and profile for one invocation. API-origin
 overrides are intended for launchctl development and explicitly assigned test
@@ -131,6 +158,14 @@ or staging environments; they are not a supported self-hosting interface.
 go test -race ./...
 go vet ./...
 go build ./...
+```
+
+Preview the real startup header without loading local credentials or API
+clients:
+
+```bash
+make splash-preview
+go run ./internal/splash/preview --width 28 --color never --version 0.2.3
 ```
 
 See [the CLI reference](docs/cli-reference.md) and the

@@ -3,6 +3,24 @@
 Use `lctl <command> --help` as the source of truth for flags in the installed
 version. The global flags are `--json`, `--ci`, `--profile`, and `--api-url`.
 
+## Local CLI lifecycle
+
+| Outcome | Command |
+| --- | --- |
+| Print installed version | `lctl version` |
+| Check for an update | `lctl update --check [--json]` |
+| Install latest stable release | `lctl update` |
+| Reinstall latest stable release | `lctl update --force` |
+| Disable passive notices | `LAUNCHCTL_NO_UPDATE_CHECK=1` |
+
+Updating the CLI changes the local executable, not launchctl infrastructure.
+Do it only when the user explicitly asks to install or update local software.
+Homebrew installations delegate to `brew upgrade kkz6/tap/lctl`; never bypass
+that ownership by replacing a Cellar binary. If Homebrew requires trust, show
+`brew trust --formula kkz6/tap/lctl` and let the user make that trust decision.
+After a binary update, update the separately managed skill with
+`lctl ai update` only when the user requests it.
+
 ## Account and context
 
 | Outcome | Command |

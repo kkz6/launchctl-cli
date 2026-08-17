@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"time"
+	"strings"
 
 	"github.com/kkz6/launchctl/cmd/cron"
 	"github.com/kkz6/launchctl/cmd/daemons"
@@ -21,14 +21,14 @@ import (
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/config"
+	"github.com/kkz6/launchctl/internal/selfupdate"
 	"github.com/kkz6/launchctl/internal/splash"
-	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/kkz6/launchctl/internal/tui/nav"
 	"github.com/spf13/cobra"
 )
 
 var (
-	Version = "0.1.0"
+	Version = "dev"
 
 	jsonOutput  bool
 	ciMode      bool
@@ -70,19 +70,45 @@ var rootCmd = &cobra.Command{
 		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		tui.ClearScreen()
-		fmt.Print(splash.Render(Version))
-		fmt.Println()
-		time.Sleep(2 * time.Second)
-		tui.ClearScreen()
-
-		if cfg.IsAuthenticated() {
-			client := api.NewClient(cfg)
-			nav.Run(client, cfg)
-		} else {
-			cmd.Help()
+		decorative := splash.ShouldRender(os.Stdout, ciMode, jsonOutput)
+		interactive := splash.IsInteractive(os.Stdin, os.Stdout, ciMode, jsonOutput)
+		latestUpdate := ""
+		var updateManager *selfupdate.Manager
+		if interactive && strings.TrimSpace(os.Getenv("LAUNCHCTL_NO_UPDATE_CHECK")) == "" {
+			if manager, err := newSelfUpdateManager(); err == nil {
+				updateManager = manager
+				latestUpdate = cachedAvailableUpdate(updateManager, Version)
+				startBackgroundUpdateCheck(updateManager, Version)
+			}
 		}
+		if cfg.IsAuthenticated() && interactive {
+			client := api.NewClient(cfg)
+			nav.Run(client, cfg, Version, func() string {
+				return cachedAvailableUpdate(updateManager, Version)
+			})
+			return
+		}
+
+		if decorative {
+			fmt.Println()
+			options := splash.TerminalOptions(os.Stdout)
+			options.UpdateVersion = latestUpdate
+			fmt.Print(splash.Render(Version, options))
+			fmt.Println()
+		}
+		_ = cmd.Help()
 	},
+}
+
+func cachedAvailableUpdate(manager *selfupdate.Manager, current string) string {
+	if manager == nil {
+		return ""
+	}
+	status, found := manager.CachedStatus(current)
+	if !found || !status.UpdateAvailable {
+		return ""
+	}
+	return status.LatestVersion
 }
 
 func commandSkipsConfig(cmd *cobra.Command) bool {

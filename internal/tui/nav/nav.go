@@ -2,6 +2,7 @@ package nav
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/charmbracelet/huh"
@@ -9,16 +10,21 @@ import (
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/notify"
 	"github.com/kkz6/launchctl/internal/output"
+	"github.com/kkz6/launchctl/internal/splash"
 	"github.com/kkz6/launchctl/internal/terminal"
 	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/kkz6/launchctl/internal/tui/logview"
 	metricstui "github.com/kkz6/launchctl/internal/tui/metrics"
 )
 
-func Run(client *api.Client, cfg *config.Config) {
+func Run(client *api.Client, cfg *config.Config, version string, updateVersion func() string) {
 	for {
 		tui.ClearScreen()
-		tui.PrintHeader("launchctl")
+		headerOptions := splash.TerminalOptions(os.Stdout)
+		if updateVersion != nil {
+			headerOptions.UpdateVersion = updateVersion()
+		}
+		tui.PrintBrandHeader(splash.Render(version, headerOptions))
 
 		favs := cfg.Favorites
 		options := make([]string, 0, len(favs)+3)
@@ -266,7 +272,6 @@ func sshIntoServer(cfg *config.Config, server api.ServerResponse) {
 		tui.WaitForEnter()
 	}
 }
-
 
 func viewServerLogs(client *api.Client, serverID, serverName string) {
 	for {

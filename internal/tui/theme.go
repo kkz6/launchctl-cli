@@ -9,10 +9,7 @@ func FormTheme() *huh.Theme {
 	t := huh.ThemeBase()
 
 	t.Focused.Base = lipgloss.NewStyle().
-		PaddingLeft(1).
-		BorderStyle(lipgloss.ThickBorder()).
-		BorderLeft(true).
-		BorderForeground(Indigo)
+		PaddingLeft(1)
 
 	t.Focused.Title = lipgloss.NewStyle().
 		Bold(true).
@@ -56,10 +53,7 @@ func FormTheme() *huh.Theme {
 		Padding(0, 2)
 
 	t.Blurred.Base = lipgloss.NewStyle().
-		PaddingLeft(1).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderLeft(true).
-		BorderForeground(DarkSlate)
+		PaddingLeft(1)
 
 	t.Blurred.Title = lipgloss.NewStyle().
 		Foreground(Muted)

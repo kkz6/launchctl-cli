@@ -4,13 +4,33 @@
 
 ## Installation
 
-```bash
-# Build from source
-go build -o lctl .
+### Homebrew
 
-# Move to your PATH
-mv lctl /usr/local/bin/
+```bash
+brew install kkz6/tap/lctl
+lctl version
 ```
+
+The fully qualified formula trusts only `lctl`. If Homebrew reports that a
+previously added tap is untrusted, trust the formula rather than the entire tap:
+
+```bash
+brew trust --formula kkz6/tap/lctl
+brew install kkz6/tap/lctl
+```
+
+### Source checkout
+
+Repository contributors with source access can build the current checkout:
+
+```bash
+go build -o lctl .
+./lctl version
+```
+
+The source repository is private, so `go install github.com/kkz6/launchctl@latest`
+is not a public installation method. Published macOS and Linux archives support
+AMD64 and ARM64.
 
 ## Quick Start
 
@@ -31,6 +51,58 @@ lctl init
 # Deploy
 lctl deploy trigger <site-id>
 ```
+
+---
+
+## CLI Updates
+
+### Check without changing the installation
+
+```bash
+lctl update --check
+lctl update --check --json
+```
+
+The JSON result includes `current_version`, `latest_version`,
+`update_available`, the check timestamp, and the metadata source. A successful
+check exits normally whether or not an update is available; automation should
+read `update_available`.
+
+### Install the latest stable release
+
+```bash
+lctl update
+```
+
+`lctl upgrade` is an alias. Homebrew-managed binaries delegate to
+`brew upgrade kkz6/tap/lctl`, preserving Homebrew's Cellar and receipts. If the
+formula is not trusted, run `brew trust --formula kkz6/tap/lctl` and retry.
+Direct installations download the matching macOS or Linux archive, verify its
+SHA-256 digest and staged version, and atomically replace the executable. The
+updater refuses development builds, unsupported platforms, and unmanaged
+symlink targets.
+
+Use `lctl update --force` to reinstall the latest release. For Homebrew this
+delegates to `brew reinstall kkz6/tap/lctl`. The updater never grants trust,
+invokes `sudo`, or changes the bundled AI skill automatically. Run
+`lctl ai update` separately when that skill is managed by the CLI.
+
+### Passive update notice
+
+The interactive `lctl` header displays `Update available: vX.Y.Z` from a local
+cache. Startup does not wait for the network: a detached check refreshes
+successful results at most once every 24 hours, while failed checks retry after
+one hour. Passive checks and notices are disabled in CI, JSON, non-interactive,
+and development-build contexts.
+
+To disable them explicitly:
+
+```bash
+export LAUNCHCTL_NO_UPDATE_CHECK=1
+```
+
+This setting does not disable explicit `lctl update` or
+`lctl update --check` commands.
 
 ---
 
@@ -64,7 +136,7 @@ overwritten or removed.
 Install the plugin from the GitHub repository at the matching CLI release tag:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.2
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.3
 codex plugin add launchctl@launchctl
 ```
 
@@ -571,6 +643,7 @@ Use `lctl` in automation pipelines with the `--ci` flag and environment variable
 |----------|-------------|
 | `LAUNCHCTL_TOKEN` | API token (overrides stored credentials) |
 | `LAUNCHCTL_TEAM_ID` | Team ID (overrides stored team) |
+| `LAUNCHCTL_NO_UPDATE_CHECK` | Disable passive update checks and notices |
 
 ### Usage
 
@@ -602,8 +675,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install lctl
-        run: |
-          go install github.com/kkz6/launchctl@latest
+        run: brew install kkz6/tap/lctl
 
       - name: Deploy
         env:

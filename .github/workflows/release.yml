@@ -8,6 +8,12 @@ on:
 permissions:
   contents: write
 
+# Every stable release writes the same latest.json object. Keep tag workflows
+# serialized so two releases cannot race that mutable pointer.
+concurrency:
+  group: release-publication
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -45,3 +51,266 @@ jobs:
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           AWS_ACCESS_KEY_ID: ${{ secrets.CONTABO_ACCESS_KEY }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.CONTABO_SECRET_KEY }}
+
+  publish-update-manifest:
+    name: Publish updater metadata
+    needs: release
+    if: ${{ !contains(github.ref_name, '-') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.CONTABO_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.CONTABO_SECRET_KEY }}
+      AWS_DEFAULT_REGION: sin1
+      AWS_EC2_METADATA_DISABLED: "true"
+      S3_ENDPOINT: https://sin1.contabostorage.com
+      S3_BUCKET: launchctl-cli
+      PUBLIC_BASE: https://sin1.contabostorage.com/2fac7399ecc245c4b352abf9eb154e1d:launchctl-cli
+      FORMULA_URL: https://raw.githubusercontent.com/kkz6/homebrew-tap/main/Formula/lctl.rb
+
+    steps:
+      - name: Build and publish stable update manifest
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "unsupported release tag: ${tag}" >&2
+            exit 1
+          fi
+
+          version="${tag#v}"
+          checksum_name="lctl_${version}_checksums.txt"
+          work_dir="$(mktemp -d)"
+          trap 'rm -rf "${work_dir}"' EXIT
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --location \
+            --retry 5 \
+            --retry-all-errors \
+            "${PUBLIC_BASE}/${tag}/${checksum_name}" \
+            --output "${work_dir}/checksums.txt"
+
+          # GoReleaser commits the tap before this job begins, but the raw-file
+          # CDN can briefly serve the previous formula. Wait for the exact
+          # release instead of publishing metadata from a stale response.
+          formula_ready=false
+          for attempt in {1..12}; do
+            if curl \
+              --fail \
+              --silent \
+              --show-error \
+              --location \
+              --retry 5 \
+              --retry-all-errors \
+              "${FORMULA_URL}?release=${tag}&attempt=${attempt}" \
+              --output "${work_dir}/lctl.rb" &&
+              grep -Fqx "  version \"${version}\"" "${work_dir}/lctl.rb"; then
+              formula_ready=true
+              break
+            fi
+            sleep 5
+          done
+
+          if [[ "${formula_ready}" != true ]]; then
+            echo "Homebrew formula does not advertise ${version}" >&2
+            exit 1
+          fi
+
+          artifacts='[]'
+
+          for goos in darwin linux; do
+            for goarch in amd64 arm64; do
+              filename="lctl-${goos}-${goarch}.tar.gz"
+              mapfile -t matches < <(
+                awk -v filename="${filename}" \
+                  '$2 == filename { print $1 }' \
+                  "${work_dir}/checksums.txt"
+              )
+
+              if [[ "${#matches[@]}" -ne 1 ]] ||
+                 [[ ! "${matches[0]}" =~ ^[0-9a-f]{64}$ ]]; then
+                echo "missing or invalid checksum for ${filename}" >&2
+                exit 1
+              fi
+
+              sha256="${matches[0]}"
+              url="${PUBLIC_BASE}/${tag}/${filename}"
+
+              if ! awk \
+                -v wanted_url="${url}" \
+                -v wanted_sha="${sha256}" '
+                  function trim(value) {
+                    gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                    return value
+                  }
+                  {
+                    line = $0
+                    if (trim(line) == "url \"" wanted_url "\"") {
+                      if (getline <= 0) {
+                        exit 2
+                      }
+                      checksum_line = $0
+                      if (trim(checksum_line) == "sha256 \"" wanted_sha "\"") {
+                        matches++
+                      }
+                    }
+                  }
+                  END { exit(matches == 1 ? 0 : 1) }
+                ' "${work_dir}/lctl.rb"; then
+                echo "Homebrew formula metadata does not match ${filename}" >&2
+                exit 1
+              fi
+
+              archive_path="${work_dir}/${filename}"
+              curl \
+                --fail \
+                --silent \
+                --show-error \
+                --location \
+                --retry 5 \
+                --retry-all-errors \
+                "${url}" \
+                --output "${archive_path}"
+
+              actual_sha256="$(sha256sum "${archive_path}" | awk '{ print $1 }')"
+              if [[ "${actual_sha256}" != "${sha256}" ]]; then
+                echo "published archive checksum mismatch for ${filename}: got ${actual_sha256}, want ${sha256}" >&2
+                exit 1
+              fi
+              rm -f "${archive_path}"
+
+              artifacts="$(
+                jq -cn \
+                  --argjson artifacts "${artifacts}" \
+                  --arg os "${goos}" \
+                  --arg arch "${goarch}" \
+                  --arg filename "${filename}" \
+                  --arg url "${url}" \
+                  --arg sha256 "${sha256}" \
+                  '$artifacts + [{
+                    os: $os,
+                    arch: $arch,
+                    filename: $filename,
+                    url: $url,
+                    sha256: $sha256
+                  }]'
+              )"
+            done
+          done
+
+          published_at="$(
+            gh api \
+              "repos/${GITHUB_REPOSITORY}/releases/tags/${tag}" \
+              --jq '.published_at'
+          )"
+
+          jq -n \
+            --arg version "${version}" \
+            --arg tag "${tag}" \
+            --arg published_at "${published_at}" \
+            --argjson artifacts "${artifacts}" \
+            '{
+              schema_version: 1,
+              channel: "stable",
+              version: $version,
+              tag: $tag,
+              published_at: $published_at,
+              artifacts: $artifacts
+            }' >"${work_dir}/latest.json"
+
+          jq -e '
+            .schema_version == 1 and
+            .channel == "stable" and
+            (.artifacts | length == 4)
+          ' "${work_dir}/latest.json" >/dev/null
+
+          # The immutable manifest is published first. latest.json is the final
+          # release marker and is never advanced after a partial release.
+          aws --endpoint-url "${S3_ENDPOINT}" s3 cp \
+            "${work_dir}/latest.json" \
+            "s3://${S3_BUCKET}/${tag}/update.json" \
+            --content-type "application/json" \
+            --cache-control "public,max-age=31536000,immutable"
+
+          expected_latest="${version}"
+          publish_latest=true
+
+          guard_latest_pointer() {
+            local phase="$1"
+            local current_file="${work_dir}/current-latest-${phase}.json"
+            local probe_error="${work_dir}/current-latest-${phase}.error"
+            local existing_version
+
+            # Missing public S3 objects can return HTTP 403, so use the
+            # authenticated object API to distinguish a genuinely absent
+            # first manifest from a credentials or storage failure.
+            if aws --endpoint-url "${S3_ENDPOINT}" s3api head-object \
+              --bucket "${S3_BUCKET}" \
+              --key latest.json \
+              >"${work_dir}/current-latest-${phase}.head" \
+              2>"${probe_error}"; then
+              aws --endpoint-url "${S3_ENDPOINT}" s3 cp \
+                "s3://${S3_BUCKET}/latest.json" \
+                "${current_file}" \
+                --only-show-errors
+
+              existing_version="$(jq -er '.version' "${current_file}")"
+              if [[ ! "${existing_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "existing latest.json has invalid version ${existing_version}" >&2
+                exit 1
+              fi
+              if python3 - "${existing_version}" "${version}" <<'PY'
+          import sys
+          existing = tuple(map(int, sys.argv[1].split(".")))
+          candidate = tuple(map(int, sys.argv[2].split(".")))
+          raise SystemExit(0 if existing > candidate else 1)
+          PY
+              then
+                publish_latest=false
+                expected_latest="${existing_version}"
+                echo "latest.json already points to newer v${existing_version}; leaving it unchanged"
+              fi
+            elif ! grep -Eq '\((404|NoSuchKey|NotFound)\)|Not Found' "${probe_error}"; then
+              echo "cannot inspect existing latest.json:" >&2
+              sed 's/^/  /' "${probe_error}" >&2
+              exit 1
+            else
+              echo "latest.json does not exist yet; publishing the first stable pointer"
+            fi
+          }
+
+          # A rerun of an older tag may publish its immutable manifest, but it
+          # must never move the shared pointer backwards.
+          guard_latest_pointer "initial"
+
+          if [[ "${publish_latest}" == true ]]; then
+            # Re-read immediately before the mutable upload. Workflow-level
+            # serialization prevents release runs from changing it between
+            # this guard and the write; the second guard also catches a newer
+            # pointer installed by an external publisher during this job.
+            guard_latest_pointer "pre-upload"
+            if [[ "${publish_latest}" == true ]]; then
+              aws --endpoint-url "${S3_ENDPOINT}" s3 cp \
+                "${work_dir}/latest.json" \
+                "s3://${S3_BUCKET}/latest.json" \
+                --content-type "application/json" \
+                --cache-control "public,max-age=300,must-revalidate"
+            fi
+          fi
+
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            "${PUBLIC_BASE}/latest.json?release=${tag}" |
+            jq -e \
+              --arg version "${expected_latest}" \
+              '.version == $version and (.artifacts | length == 4)' \
+              >/dev/null

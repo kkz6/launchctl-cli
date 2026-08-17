@@ -1,7 +1,10 @@
-.PHONY: build run clean install uninstall release-dry release-patch release-minor release-major
+.PHONY: build run splash-preview clean install uninstall release-dry release-patch release-minor release-major
 
 CURRENT_TAG := $(shell git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0")
-VERSION := $(shell echo $(CURRENT_TAG) | sed 's/^v//')
+# Contributor builds stay explicitly non-updatable. GoReleaser injects the
+# published version for release binaries; use VERSION=x.y.z only for a local
+# release reproduction.
+VERSION ?= dev
 BINARY = bin/lctl
 LDFLAGS = -ldflags "-X github.com/kkz6/launchctl/cmd.Version=$(VERSION)"
 PREFIX ?= /usr/local
@@ -11,6 +14,9 @@ build:
 
 run: build
 	./$(BINARY)
+
+splash-preview:
+	go run ./internal/splash/preview --version $(VERSION)
 
 install: build
 	install -d $(PREFIX)/bin

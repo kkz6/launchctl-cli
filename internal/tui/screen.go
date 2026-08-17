@@ -2,10 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/term"
 	"github.com/kkz6/launchctl/internal/notify"
 )
 
@@ -18,7 +21,25 @@ var (
 )
 
 func ClearScreen() {
-	fmt.Print("\033[H\033[2J\033[3J")
+	clearScreen(os.Stdout)
+}
+
+func clearScreen(writer io.Writer) {
+	// Clear only the active viewport. Erasing scrollback makes navigation
+	// hostile in terminals and tmux panes and is unnecessary for redraws.
+	fmt.Fprint(writer, "\033[H\033[2J")
+}
+
+func PrintBrandHeader(header string) {
+	fmt.Println()
+	fmt.Println(strings.TrimSuffix(header, "\n"))
+	PrintDivider()
+
+	if bar := notify.Render(); bar != "" {
+		fmt.Println(bar)
+	}
+
+	fmt.Println()
 }
 
 func PrintHeader(parts ...string) {
@@ -46,7 +67,7 @@ func PrintHeader(parts ...string) {
 
 type waitModel struct{}
 
-func (m waitModel) Init() tea.Cmd                           { return nil }
+func (m waitModel) Init() tea.Cmd { return nil }
 func (m waitModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(tea.KeyMsg); ok {
 		return m, tea.Quit
@@ -62,7 +83,18 @@ func WaitForEnter() {
 }
 
 func PrintDivider() {
-	fmt.Println(dividerStyle.Render(strings.Repeat("─", 50)))
+	width := 50
+	if detected, _, err := term.GetSize(os.Stdout.Fd()); err == nil {
+		width = dividerWidth(detected)
+	}
+	fmt.Println(dividerStyle.Render(strings.Repeat("─", width)))
+}
+
+func dividerWidth(terminalWidth int) int {
+	if terminalWidth > 0 && terminalWidth < 50 {
+		return terminalWidth
+	}
+	return 50
 }
 
 func PrintHint(text string) {
