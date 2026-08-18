@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kkz6/launchctl/cmd/cron"
 	"github.com/kkz6/launchctl/cmd/daemons"
@@ -23,6 +24,7 @@ import (
 	"github.com/kkz6/launchctl/internal/config"
 	"github.com/kkz6/launchctl/internal/selfupdate"
 	"github.com/kkz6/launchctl/internal/splash"
+	"github.com/kkz6/launchctl/internal/tui"
 	"github.com/kkz6/launchctl/internal/tui/nav"
 	"github.com/spf13/cobra"
 )
@@ -42,6 +44,10 @@ var rootCmd = &cobra.Command{
 	Short: "CLI for managing launchctl servers, sites, and deployments",
 	Long:  "lctl is a command-line tool for managing your launchctl servers, sites, and deployments.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if err := tui.ConfigureTheme(os.Getenv("LAUNCHCTL_THEME")); err != nil {
+			return err
+		}
+
 		if commandSkipsConfig(cmd) {
 			cfg = config.DefaultConfig()
 			appstate.SetConfig(cfg)
@@ -82,6 +88,14 @@ var rootCmd = &cobra.Command{
 			}
 		}
 		if cfg.IsAuthenticated() && interactive {
+			options := splash.TerminalOptions(os.Stdout)
+			options.UpdateVersion = latestUpdate
+			tui.ClearScreen()
+			fmt.Println()
+			fmt.Print(splash.Render(Version, options))
+			fmt.Println()
+			time.Sleep(splash.InteractiveDisplayDuration)
+
 			client := api.NewClient(cfg)
 			nav.Run(client, cfg, Version, func() string {
 				return cachedAvailableUpdate(updateManager, Version)

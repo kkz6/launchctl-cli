@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -17,6 +18,9 @@ const (
 	Description             = "Deploy, operate, and monitor from one terminal."
 	defaultWidth            = 80
 	minimumDescriptionWidth = 28
+	// InteractiveDisplayDuration keeps the standalone startup splash visible
+	// before the authenticated navigation menu replaces it.
+	InteractiveDisplayDuration = 2 * time.Second
 )
 
 // Options controls the deterministic parts of the splash renderer. Keeping

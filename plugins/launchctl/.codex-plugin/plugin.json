@@ -1,6 +1,6 @@
 {
   "name": "launchctl",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Operate launchctl infrastructure safely through the lctl CLI.",
   "author": {
     "name": "kkz6",

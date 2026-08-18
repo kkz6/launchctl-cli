@@ -5,20 +5,25 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/kkz6/launchctl/internal/tui"
 )
 
 const (
-	reset  = "\033[0m"
-	bold   = "\033[1m"
-	indigo = "\033[38;2;129;140;248m"
-	slate  = "\033[38;2;148;163;184m"
-	dark   = "\033[38;2;51;65;85m"
-	green  = "\033[38;2;74;222;128m"
-	muted  = "\033[38;2;100;116;139m"
 	clrEOL = "\033[K"
 
 	headerLines = 4
 	footerLines = 2
+)
+
+var (
+	frameBreadcrumbStyle       = lipgloss.NewStyle().Foreground(tui.Slate)
+	frameBreadcrumbActiveStyle = lipgloss.NewStyle().Bold(true).Foreground(tui.Indigo)
+	frameMutedStyle            = lipgloss.NewStyle().Foreground(tui.Muted)
+	frameConnectedStyle        = lipgloss.NewStyle().Bold(true).Foreground(tui.Green)
+	frameDividerStyle          = lipgloss.NewStyle().Foreground(tui.DarkSlate)
+	frameFooterStyle           = lipgloss.NewStyle().Bold(true).Foreground(tui.White)
 )
 
 type frame struct {
@@ -50,20 +55,13 @@ func (f *frame) renderBreadcrumb() string {
 
 	for i, part := range f.breadcrumb {
 		if i > 0 {
-			b.WriteString(muted)
-			b.WriteString(" > ")
-			b.WriteString(reset)
+			b.WriteString(frameMutedStyle.Render(" > "))
 		}
 
 		if i == len(f.breadcrumb)-1 {
-			b.WriteString(bold)
-			b.WriteString(indigo)
-			b.WriteString(part)
-			b.WriteString(reset)
+			b.WriteString(frameBreadcrumbActiveStyle.Render(part))
 		} else {
-			b.WriteString(slate)
-			b.WriteString(part)
-			b.WriteString(reset)
+			b.WriteString(frameBreadcrumbStyle.Render(part))
 		}
 	}
 
@@ -71,10 +69,10 @@ func (f *frame) renderBreadcrumb() string {
 }
 
 func (f *frame) renderStatus() string {
-	return fmt.Sprintf("%s%s%s  %s•%s  %s%s%s%s",
-		slate, f.status, reset,
-		muted, reset,
-		green, bold, f.statusTag, reset,
+	return fmt.Sprintf("%s  %s  %s",
+		frameBreadcrumbStyle.Render(f.status),
+		frameMutedStyle.Render("•"),
+		frameConnectedStyle.Render(f.statusTag),
 	)
 }
 
@@ -84,7 +82,7 @@ func (f *frame) divider(cols int, double bool) string {
 		ch = "═"
 	}
 
-	return fmt.Sprintf("%s%s%s", dark, strings.Repeat(ch, cols), reset)
+	return frameDividerStyle.Render(strings.Repeat(ch, cols))
 }
 
 func (f *frame) scrollRegionSeq(rows int) string {
@@ -122,7 +120,7 @@ func (f *frame) writeFooterDirect(out *os.File, cols, rows int) {
 	fmt.Fprintf(out, "%s%s", f.divider(cols, false), clrEOL)
 
 	moveTo(out, rows, 1)
-	fmt.Fprintf(out, "%s%s%s%s", bold, f.footer, reset, clrEOL)
+	fmt.Fprintf(out, "%s%s", frameFooterStyle.Render(f.footer), clrEOL)
 }
 
 func (f *frame) ensureFooter() {
@@ -134,7 +132,7 @@ func (f *frame) ensureFooter() {
 	buf.WriteString("\033[r")
 
 	buf.WriteString(fmt.Sprintf("\033[%d;1H%s%s", rows-1, f.divider(cols, false), clrEOL))
-	buf.WriteString(fmt.Sprintf("\033[%d;1H%s%s%s%s", rows, bold, f.footer, reset, clrEOL))
+	buf.WriteString(fmt.Sprintf("\033[%d;1H%s%s", rows, frameFooterStyle.Render(f.footer), clrEOL))
 
 	buf.WriteString(f.scrollRegionSeq(rows))
 	buf.WriteString("\0338")

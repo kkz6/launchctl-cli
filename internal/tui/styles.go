@@ -2,22 +2,28 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
 var (
-	Indigo    = lipgloss.Color("#818CF8")
-	Green     = lipgloss.Color("#4ade80")
-	Slate     = lipgloss.Color("#94a3b8")
-	Red       = lipgloss.Color("#f87171")
-	Yellow    = lipgloss.Color("#fbbf24")
-	Blue      = lipgloss.Color("#60a5fa")
-	Cyan      = lipgloss.Color("#22d3ee")
-	Orange    = lipgloss.Color("#fb923c")
-	White     = lipgloss.Color("#f8fafc")
-	Muted     = lipgloss.Color("#64748b")
-	DarkSlate = lipgloss.Color("#334155")
+	Indigo = lipgloss.AdaptiveColor{Light: "#4F46E5", Dark: "#818CF8"}
+	Green  = lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#4ADE80"}
+	Slate  = lipgloss.AdaptiveColor{Light: "#475569", Dark: "#94A3B8"}
+	Red    = lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#F87171"}
+	Yellow = lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FBBF24"}
+	Blue   = lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#60A5FA"}
+	Cyan   = lipgloss.AdaptiveColor{Light: "#0E7490", Dark: "#22D3EE"}
+	Orange = lipgloss.AdaptiveColor{Light: "#C2410C", Dark: "#FB923C"}
+
+	// White is the historical name for primary text. Its light variant is
+	// intentionally dark so values remain readable on light terminal themes.
+	White     = lipgloss.AdaptiveColor{Light: "#0F172A", Dark: "#F8FAFC"}
+	Muted     = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"}
+	DarkSlate = lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#64748B"}
+	Panel     = lipgloss.AdaptiveColor{Light: "#E2E8F0", Dark: "#1E293B"}
+	OnAccent  = lipgloss.AdaptiveColor{Light: "#FFFFFF", Dark: "#0F172A"}
 
 	Title = lipgloss.NewStyle().
 		Bold(true).
@@ -65,6 +71,24 @@ var (
 	StatusPending      = lipgloss.NewStyle().Foreground(Yellow).Bold(true)
 	StatusRunning      = lipgloss.NewStyle().Foreground(Blue).Bold(true)
 )
+
+// ConfigureTheme applies an optional terminal-background override. Automatic
+// detection remains the default, while the override keeps light themes usable
+// in multiplexers that cannot report their background color.
+func ConfigureTheme(value string) error {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", "auto":
+		return nil
+	case "light":
+		lipgloss.SetHasDarkBackground(false)
+		return nil
+	case "dark":
+		lipgloss.SetHasDarkBackground(true)
+		return nil
+	default:
+		return fmt.Errorf("LAUNCHCTL_THEME must be auto, light, or dark")
+	}
+}
 
 func StatusStyle(status string) lipgloss.Style {
 	switch status {

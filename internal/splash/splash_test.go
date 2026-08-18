@@ -3,10 +3,17 @@ package splash
 import (
 	"strings"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
 )
+
+func TestInteractiveDisplayDurationIsDeliberate(t *testing.T) {
+	if InteractiveDisplayDuration < 2*time.Second {
+		t.Fatalf("interactive splash duration = %s, want at least 2s", InteractiveDisplayDuration)
+	}
+}
 
 func TestRenderPlainWide(t *testing.T) {
 	want := "launchctl  v0.2.2\n" + Description + "\n"

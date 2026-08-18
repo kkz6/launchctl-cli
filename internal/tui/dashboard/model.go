@@ -167,12 +167,12 @@ func (m Model) View() string {
 func (m Model) renderServers() string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("15")).
-		Background(lipgloss.Color("62")).
+		Foreground(tui.OnAccent).
+		Background(tui.Indigo).
 		Padding(0, 1)
 
 	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	borderStyle := lipgloss.NewStyle().Foreground(tui.DarkSlate)
 
 	var rows [][]string
 	for _, s := range m.data.Servers {
@@ -203,12 +203,12 @@ func (m Model) renderServers() string {
 func (m Model) renderActivity() string {
 	headerStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("15")).
-		Background(lipgloss.Color("62")).
+		Foreground(tui.OnAccent).
+		Background(tui.Indigo).
 		Padding(0, 1)
 
 	cellStyle := lipgloss.NewStyle().Padding(0, 1)
-	borderStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("238"))
+	borderStyle := lipgloss.NewStyle().Foreground(tui.DarkSlate)
 
 	var rows [][]string
 	for _, a := range m.data.RecentActivity {

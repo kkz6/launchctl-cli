@@ -28,22 +28,22 @@ var (
 	queue []notification
 
 	successStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#4ade80")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#15803D", Dark: "#4ADE80"}).
 			Bold(true)
 
 	infoStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#60a5fa"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#1D4ED8", Dark: "#60A5FA"})
 
 	warningStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#fbbf24")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#A16207", Dark: "#FBBF24"}).
 			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#f87171")).
+			Foreground(lipgloss.AdaptiveColor{Light: "#B91C1C", Dark: "#F87171"}).
 			Bold(true)
 
 	barStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#64748b"))
+			Foreground(lipgloss.AdaptiveColor{Light: "#64748B", Dark: "#94A3B8"})
 )
 
 func Send(title, message string) {

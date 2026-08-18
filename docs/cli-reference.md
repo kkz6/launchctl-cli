@@ -136,7 +136,7 @@ overwritten or removed.
 Install the plugin from the GitHub repository at the matching CLI release tag:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.4
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.5
 codex plugin add launchctl@launchctl
 ```
 
@@ -644,6 +644,7 @@ Use `lctl` in automation pipelines with the `--ci` flag and environment variable
 | `LAUNCHCTL_TOKEN` | API token (overrides stored credentials) |
 | `LAUNCHCTL_TEAM_ID` | Team ID (overrides stored team) |
 | `LAUNCHCTL_NO_UPDATE_CHECK` | Disable passive update checks and notices |
+| `LAUNCHCTL_THEME` | Terminal color mode: `auto`, `light`, or `dark` |
 
 ### Usage
 

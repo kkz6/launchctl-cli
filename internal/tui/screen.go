@@ -13,11 +13,11 @@ import (
 )
 
 var (
-	breadcrumbSep    = lipgloss.NewStyle().Foreground(Muted).Render(" > ")
-	breadcrumbItem   = lipgloss.NewStyle().Foreground(Slate)
-	breadcrumbActive = lipgloss.NewStyle().Foreground(Indigo).Bold(true)
-	dividerStyle     = lipgloss.NewStyle().Foreground(DarkSlate)
-	promptStyle      = lipgloss.NewStyle().Foreground(Muted).Italic(true)
+	breadcrumbSepStyle = lipgloss.NewStyle().Foreground(Muted)
+	breadcrumbItem     = lipgloss.NewStyle().Foreground(Slate)
+	breadcrumbActive   = lipgloss.NewStyle().Foreground(Indigo).Bold(true)
+	dividerStyle       = lipgloss.NewStyle().Foreground(DarkSlate)
+	promptStyle        = lipgloss.NewStyle().Foreground(Muted).Italic(true)
 )
 
 func ClearScreen() {
@@ -47,7 +47,7 @@ func PrintHeader(parts ...string) {
 	var b strings.Builder
 	for i, p := range parts {
 		if i > 0 {
-			b.WriteString(breadcrumbSep)
+			b.WriteString(breadcrumbSepStyle.Render(" > "))
 		}
 		if i == len(parts)-1 {
 			b.WriteString(breadcrumbActive.Render(p))

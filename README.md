@@ -46,7 +46,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.4
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.5
 codex plugin add launchctl@launchctl
 ```
 
@@ -147,6 +147,7 @@ in `.launchctl.yml`. Runtime environment variables are:
 - `LAUNCHCTL_TOKEN`
 - `LAUNCHCTL_TEAM_ID`
 - `LAUNCHCTL_NO_UPDATE_CHECK` (disables passive update checks and notices)
+- `LAUNCHCTL_THEME` (`auto`, `light`, or `dark`; useful when a terminal multiplexer cannot report its background)
 
 `--api-url` overrides the environment and profile for one invocation. API-origin
 overrides are intended for launchctl development and explicitly assigned test
@@ -165,7 +166,7 @@ clients:
 
 ```bash
 make splash-preview
-go run ./internal/splash/preview --width 28 --color never --version 0.2.4
+go run ./internal/splash/preview --width 28 --color never --version 0.2.5
 ```
 
 See [the CLI reference](docs/cli-reference.md) and the

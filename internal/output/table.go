@@ -11,7 +11,7 @@ import (
 var (
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(tui.White).
+			Foreground(tui.OnAccent).
 			Background(tui.Indigo).
 			Padding(0, 1)
 

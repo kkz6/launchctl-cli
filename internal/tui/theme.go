@@ -44,7 +44,7 @@ func FormTheme() *huh.Theme {
 
 	t.Focused.FocusedButton = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#0f172a")).
+		Foreground(OnAccent).
 		Background(Indigo).
 		Padding(0, 2)
 

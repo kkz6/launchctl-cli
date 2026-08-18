@@ -31,14 +31,14 @@ var (
 	logHeaderStyle = lipgloss.NewStyle().
 			Bold(true).
 			Foreground(tui.Slate).
-			Background(lipgloss.Color("#1e293b")).
+			Background(tui.Panel).
 			Padding(0, 1)
 
 	logLineStyle = lipgloss.NewStyle().
 			Foreground(tui.Slate)
 
 	logCountStyle = lipgloss.NewStyle().
-			Foreground(tui.Muted)
+			Foreground(tui.Slate)
 )
 
 type Info struct {
