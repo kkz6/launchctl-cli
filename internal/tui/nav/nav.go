@@ -79,7 +79,7 @@ func serversMenu(client *api.Client, cfg *config.Config) {
 			{Header: "Type", Width: 12},
 			{Header: "Status", Width: 16},
 			{Header: "IP", Width: 16},
-			{Header: "Sites", Width: 6},
+			{Header: "Resources", Width: 11},
 		}
 
 		var rows []tui.TableRow
@@ -89,7 +89,7 @@ func serversMenu(client *api.Client, cfg *config.Config) {
 				ip = *s.PublicIPv4
 			}
 			rows = append(rows, tui.TableRow{
-				Columns: []string{s.Name, s.ProviderLabel, s.TypeLabel, output.StatusDot(s.Status), ip, fmt.Sprintf("%d", s.SitesCount)},
+				Columns: []string{s.Name, s.ProviderLabel, s.TypeLabel, output.StatusDot(s.Status), ip, serverResourceSummary(s)},
 			})
 		}
 
@@ -102,42 +102,116 @@ func serversMenu(client *api.Client, cfg *config.Config) {
 	}
 }
 
+func serverResourceSummary(server api.ServerResponse) string {
+	if strings.EqualFold(server.Type, "docker") {
+		return countLabel(server.ProjectsCount, "project", "projects")
+	}
+	return countLabel(server.SitesCount, "site", "sites")
+}
+
+func countLabel(count int, singular, plural string) string {
+	label := plural
+	if count == 1 {
+		label = singular
+	}
+	return fmt.Sprintf("%d %s", count, label)
+}
+
+type serverAction string
+
+const (
+	serverActionDetails   serverAction = "details"
+	serverActionSites     serverAction = "sites"
+	serverActionProjects  serverAction = "projects"
+	serverActionLogs      serverAction = "logs"
+	serverActionServices  serverAction = "services"
+	serverActionDatabases serverAction = "databases"
+	serverActionFirewall  serverAction = "firewall"
+	serverActionCron      serverAction = "cron"
+	serverActionDaemons   serverAction = "daemons"
+	serverActionMetrics   serverAction = "metrics"
+	serverActionReboot    serverAction = "reboot"
+	serverActionSSH       serverAction = "ssh"
+)
+
+type serverActionOption struct {
+	key   serverAction
+	label string
+}
+
+func serverActionOptions(server api.ServerResponse) []serverActionOption {
+	resource := serverActionOption{key: serverActionSites, label: "View Sites"}
+	isDocker := strings.EqualFold(server.Type, "docker")
+	if isDocker {
+		resource = serverActionOption{key: serverActionProjects, label: "View Projects"}
+	}
+
+	options := []serverActionOption{
+		{key: serverActionDetails, label: "Show Details"},
+		resource,
+		{key: serverActionLogs, label: "View Logs"},
+		{key: serverActionServices, label: "Services"},
+	}
+	if !isDocker {
+		options = append(options,
+			serverActionOption{key: serverActionDatabases, label: "Databases"},
+			serverActionOption{key: serverActionFirewall, label: "Firewall"},
+			serverActionOption{key: serverActionCron, label: "Cron Jobs"},
+			serverActionOption{key: serverActionDaemons, label: "Daemons"},
+		)
+	} else {
+		options = append(options, serverActionOption{key: serverActionFirewall, label: "Firewall"})
+	}
+	return append(options,
+		serverActionOption{key: serverActionMetrics, label: "Metrics"},
+		serverActionOption{key: serverActionReboot, label: "Reboot"},
+		serverActionOption{key: serverActionSSH, label: "SSH"},
+	)
+}
+
 func serverActions(client *api.Client, cfg *config.Config, server api.ServerResponse) {
 	for {
 		tui.ClearScreen()
 		tui.PrintHeader("lctl", "Servers", server.Name)
 
+		actions := serverActionOptions(server)
+		labels := make([]string, 0, len(actions))
+		for _, action := range actions {
+			labels = append(labels, action.label)
+		}
 		choice, err := tui.SelectFromList(
 			fmt.Sprintf("Server: %s", server.Name),
-			[]string{"Show Details", "View Sites", "View Logs", "Services", "Databases", "Firewall", "Cron Jobs", "Daemons", "Metrics", "Reboot", "SSH"},
+			labels,
 			"Back",
 		)
-		if err != nil || choice == 11 {
+		if err != nil || choice == len(actions) {
 			return
 		}
 
-		switch choice {
-		case 0:
+		switch actions[choice].key {
+		case serverActionDetails:
 			showServerDetails(server)
-		case 1:
+		case serverActionSites:
 			sitesMenu(client, cfg, server.ID, server.Name)
-		case 2:
+		case serverActionProjects:
+			dockerProjectsMenu(client, cfg, server.ID, server.Name)
+		case serverActionLogs:
 			viewServerLogs(client, server.ID, server.Name)
-		case 3:
+		case serverActionServices:
 			viewServices(client, server.ID, server.Name)
-		case 4:
+		case serverActionDatabases:
 			viewDatabases(client, server.ID, server.Name)
-		case 5:
+		case serverActionFirewall:
 			viewFirewallRules(client, server.ID, server.Name)
-		case 6:
+		case serverActionCron:
 			viewCronJobs(client, server.ID, server.Name)
-		case 7:
+		case serverActionDaemons:
 			viewDaemonsTUI(client, server.ID, server.Name)
-		case 8:
+		case serverActionMetrics:
 			showServerMetrics(client, cfg, server)
-		case 9:
+		case serverActionReboot:
 			rebootServer(client, server)
-		case 10:
+		case serverActionSSH:
 			sshIntoServer(cfg, server)
 		}
 	}
@@ -176,7 +250,12 @@ func showServerDetails(server api.ServerResponse) {
 		fmt.Println(tui.Label.Render("Storage:") + tui.Value.Render(fmt.Sprintf("%d GB", *server.StorageInGB)))
 	}
 
-	fmt.Println(tui.Label.Render("Sites:") + tui.Value.Render(fmt.Sprintf("%d", server.SitesCount)))
+	if strings.EqualFold(server.Type, "docker") {
+		fmt.Println(tui.Label.Render("Projects:") + tui.Value.Render(fmt.Sprintf("%d", server.ProjectsCount)))
+		fmt.Println(tui.Label.Render("Workloads:") + tui.Value.Render(fmt.Sprintf("%d", server.WorkloadsCount)))
+	} else {
+		fmt.Println(tui.Label.Render("Sites:") + tui.Value.Render(fmt.Sprintf("%d", server.SitesCount)))
+	}
 	fmt.Println(tui.Label.Render("Created:") + tui.Value.Render(server.CreatedAt))
 
 	tui.WaitForEnter()

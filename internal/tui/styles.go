@@ -92,11 +92,11 @@ func ConfigureTheme(value string) error {
 
 func StatusStyle(status string) lipgloss.Style {
 	switch status {
-	case "running", "connected", "finished", "installed", "active", "healthy":
+	case "running", "success", "connected", "finished", "installed", "active", "healthy":
 		return StatusConnected
-	case "failed", "disconnected", "error", "unhealthy":
+	case "failed", "errored", "disconnected", "error", "unhealthy":
 		return StatusDisconnected
-	case "pending", "new", "starting", "installing", "deploying":
+	case "pending", "new", "starting", "stopping", "restarting", "building", "installing", "deploying", "deleting":
 		return StatusPending
 	case "provisioning", "rebooting":
 		return StatusRunning

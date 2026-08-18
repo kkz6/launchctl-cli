@@ -32,7 +32,7 @@ After a binary update, update the separately managed skill with
 | List/add/use profiles | `lctl config profiles`, `config profiles add/use` |
 | One-command profile | `lctl --profile <name> …` |
 | Set an approved development API origin | `lctl config set api_url <origin>` |
-| Bind repository | `lctl init` |
+| Bind repository to site or Docker workload | `lctl init` |
 | Live dashboard | `lctl status` |
 
 ## Servers and sites
@@ -64,24 +64,28 @@ After a binary update, update the separately managed skill with
 
 ## Docker projects and applications
 
-There is no dedicated typed Docker command group in the current CLI. Use
-`lctl api` with confirmed `/api/servers/<server-id>/docker/...` paths, and read
+Use the typed Docker commands for core project and application workflows. Pass
+`--server` and `--project`, or initialize Docker context with `lctl init`. Read
 [docker-applications.md](docker-applications.md) before mutations.
 
 | Outcome | Command |
 | --- | --- |
-| List projects | `lctl api GET /api/servers/<server-id>/docker/projects` |
-| List applications | `lctl api GET /api/servers/<server-id>/docker/projects/<project-id>/applications` |
-| Inspect application | `lctl api GET /api/servers/<server-id>/docker/projects/<project-id>/applications/<application-id>` |
-| Deploy/rebuild | `lctl api POST …/applications/<application-id>/deploy` |
-| Restart container | `lctl api POST …/applications/<application-id>/reload` |
-| Start/stop | `lctl api POST …/applications/<application-id>/start`, `…/stop` |
-| Deployment history | `lctl api GET …/applications/<application-id>/deployments` |
+| List/show projects | `lctl docker projects list`, `lctl docker projects show [project-id]` |
+| Create/update project | `lctl docker projects create --name <name>`, `lctl docker projects update [project-id]` |
+| Delete empty project | `lctl docker projects delete [project-id] [--yes]` |
+| List/show applications | `lctl docker applications list`, `lctl docker applications show [application-id]` |
+| Create/update application | `lctl docker applications create`, `lctl docker applications update [application-id]` |
+| Deploy/rebuild | `lctl docker applications deploy [application-id] [--wait --timeout <seconds>]` |
+| Reload with current env/config | `lctl docker applications reload [application-id]` |
+| Start/stop | `lctl docker applications start [application-id]`, `lctl docker applications stop [application-id]` |
+| Deployment history | `lctl docker applications deployments [application-id]` |
+| Delete, preserving volumes | `lctl docker applications delete [application-id] [--yes]` |
+| Delete, removing volumes | add `--remove-volumes` after explicit authorization |
 | Live progress | `lctl events --filter 'docker.application.*' --filter 'deployment.gha_steps'` |
 
 Docker projects may also contain Compose stacks and container databases. List
-them with `GET …/composes` and `GET …/databases`; verify their exact routes and
-payloads before mutations.
+them with confirmed raw `GET …/composes` and `GET …/databases` calls until they
+gain typed commands; verify exact routes and payloads before mutations.
 
 ## Server operations
 
@@ -104,8 +108,7 @@ Use the raw client only for a confirmed backend path without a typed command:
 
 ```bash
 lctl api GET /api/servers/<server-id>/backups
-lctl api GET /api/servers/<server-id>/docker/projects
-lctl api GET /api/servers/<server-id>/docker/projects/<project-id>/applications
+lctl api GET /api/servers/<server-id>/docker/projects/<project-id>/applications/<application-id>/env-vars
 lctl api GET /api/scripts
 lctl api GET /api/settings/notifications
 lctl api POST /api/scripts --data @request.json

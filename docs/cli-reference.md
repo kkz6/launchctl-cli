@@ -1,6 +1,7 @@
 # lctl — CLI Reference
 
-`lctl` is a command-line tool for managing your Launchctl servers, sites, and deployments.
+`lctl` is a command-line tool for managing your Launchctl servers, sites,
+Docker projects and applications, and deployments.
 
 ## Installation
 
@@ -44,12 +45,18 @@ lctl whoami
 # Launch the interactive dashboard
 lctl
 
-# Bind a project to a server + site
+# Bind this repository to a server + site
 cd ~/my-project
 lctl init
 
 # Deploy
 lctl deploy trigger <site-id>
+
+# Or bind a repository to a Docker application
+lctl init \
+  --server <docker-server-id> \
+  --project <docker-project-id> \
+  --application <application-id>
 ```
 
 ---
@@ -136,7 +143,7 @@ overwritten or removed.
 Install the plugin from the GitHub repository at the matching CLI release tag:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.5
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.3.0
 codex plugin add launchctl@launchctl
 ```
 
@@ -271,6 +278,167 @@ lctl servers watch <server-id> --json
 
 ---
 
+## Docker Projects and Applications
+
+Docker applications belong to a project on a Docker server. The typed Docker
+commands keep the full server/project hierarchy explicit and use the same
+authenticated profile, team, JSON output, and API error handling as the rest of
+`lctl`.
+
+If `.launchctl.yml` contains Docker context, `--server`, `--project`, and a
+positional project/application target can be omitted where applicable.
+Explicit arguments and flags take precedence. Commands accept immutable IDs;
+use the corresponding list command to resolve a human-readable name.
+
+### Projects
+
+```bash
+# List and inspect
+lctl docker projects list --server <server-id>
+lctl docker projects show <project-id> --server <server-id>
+
+# Create and update
+lctl docker projects create \
+  --server <server-id> \
+  --name acme-prod \
+  --description "Production workloads"
+lctl docker projects update <project-id> \
+  --server <server-id> \
+  --name acme-production \
+  --description "Production Docker workloads"
+
+# Delete an empty project
+lctl docker projects delete <project-id> --server <server-id>
+```
+
+Project names must be unique on a server. A project cannot be deleted while it
+still contains applications, Compose stacks, or container databases. Deletion
+prompts for confirmation; `--yes` is the explicit non-interactive confirmation.
+
+### List and inspect applications
+
+```bash
+lctl docker applications list \
+  --server <server-id> \
+  --project <project-id>
+
+lctl docker applications show <application-id> \
+  --server <server-id> \
+  --project <project-id>
+```
+
+`application`, `apps`, and `app` are aliases for `applications`. Add the global
+`--json` flag to list and show commands for machine-readable output.
+
+### Create an application
+
+Every application has exactly one source. The internal port defaults to 80 and
+must be between 1 and 65535.
+
+Pre-built image:
+
+```bash
+lctl docker applications create \
+  --server <server-id> \
+  --project <project-id> \
+  --name web \
+  --source image \
+  --image nginx:1.27 \
+  --port 80
+```
+
+Use `--registry-credential <credential-id>` for a private image backed by a
+saved registry credential. Image references require an explicit tag.
+
+Git repository:
+
+```bash
+lctl docker applications create \
+  --server <server-id> \
+  --project <project-id> \
+  --name api \
+  --source git \
+  --repo https://github.com/acme/api.git \
+  --branch main \
+  --build-type dockerfile \
+  --dockerfile-path services/api/Dockerfile \
+  --build-location server \
+  --port 3000
+```
+
+Omit `--build-type` for automatic Dockerfile/Nixpacks detection. Supported
+build types are `nixpacks` and `dockerfile`; build location is `server` or
+`github_actions`. Private repositories use
+`--source-control <source-control-id>`.
+
+Inline Dockerfile:
+
+```bash
+lctl docker applications create \
+  --server <server-id> \
+  --project <project-id> \
+  --name worker \
+  --source dockerfile \
+  --dockerfile ./Dockerfile \
+  --port 8080
+```
+
+Use `--dockerfile -` to read Dockerfile content from standard input.
+
+### Update, deploy, and control an application
+
+```bash
+lctl docker applications update <application-id> \
+  --server <server-id> \
+  --project <project-id> \
+  --name api-v2
+
+lctl docker applications deploy <application-id> \
+  --server <server-id> \
+  --project <project-id>
+
+lctl docker applications deploy <application-id> \
+  --server <server-id> \
+  --project <project-id> \
+  --wait --timeout 600
+
+lctl docker applications reload <application-id> --server <server-id> --project <project-id>
+lctl docker applications stop <application-id> --server <server-id> --project <project-id>
+lctl docker applications start <application-id> --server <server-id> --project <project-id>
+lctl docker applications deployments <application-id> --server <server-id> --project <project-id>
+```
+
+`deploy` pulls or builds the configured source and recreates the container.
+`reload` is a lighter recreate: it reuses the image already on the server and
+recreates the container with the current runtime environment and container
+configuration. It does not rebuild or pull an image, and it does not create a
+deployment-history row. `stop` and `start` operate on the existing container.
+
+For live progress, run `lctl events --filter 'docker.application.*'` or use
+`deploy --wait`. A queued response is not terminal success; reconcile with
+`show` and `deployments`.
+
+### Delete an application
+
+```bash
+# Preserve named volumes (default)
+lctl docker applications delete <application-id> \
+  --server <server-id> \
+  --project <project-id>
+
+# Explicitly remove named volumes too
+lctl docker applications delete <application-id> \
+  --server <server-id> \
+  --project <project-id> \
+  --remove-volumes
+```
+
+Application deletion asks for confirmation. `--yes` confirms deletion for a
+non-interactive invocation. Named volumes are always preserved unless
+`--remove-volumes` is explicitly supplied.
+
+---
+
 ## Tasks and Events
 
 ### `lctl tasks list`
@@ -312,12 +480,14 @@ origin. Paths must begin with `/api`; request bodies must be JSON.
 
 ```bash
 lctl api GET /api/servers/<server-id>/backups
-lctl api GET /api/servers/<server-id>/docker/projects
 lctl api POST /api/scripts --data '{"name":"health-check"}'
 lctl api PATCH /api/example --data @request.json
 ```
 
-Safe reads retry transient failures. Mutation methods are never replayed.
+Use `lctl docker` for project and application workflows. The raw API remains
+available for Docker subresources without typed commands, such as environment
+variables, domains, volumes, build secrets, and GitHub Actions controls. Safe
+reads retry transient failures. Mutation methods are never replayed.
 
 ---
 
@@ -533,30 +703,51 @@ In CI/CD mode (`--ci`), the spinner is suppressed and output is plain.
 
 ---
 
-## Project Configuration
+## Repository Context
 
 ### `lctl init`
 
-Initialize a project by creating a `.launchctl.yml` file in the current directory. This binds the project to a specific server and site, so you don't need to pass `--server` and `--site` flags on every command.
+Create a `.launchctl.yml` file in the current directory. `lctl init` inspects
+the selected server type: a web-application server is bound to a site, while a
+Docker server is bound to a Docker project and, optionally, an application.
 
 ```bash
-# Interactive — pick server and site from a list
+# Interactive — pick a server, then a site or Docker application
 lctl init
 
-# Non-interactive
+# Bind a site non-interactively
 lctl init --server <server-id> --site <site-id>
+
+# Bind a Docker application non-interactively
+lctl init \
+  --server <docker-server-id> \
+  --project <project-id> \
+  --application <application-id>
 ```
 
-This creates a `.launchctl.yml` file:
+Site context uses:
 
 ```yaml
 server: abc123
 site: def456
 ```
 
-Once initialized, commands like `lctl sites list`, `lctl deploy trigger`, etc. will automatically use the configured server and site.
+Docker context uses distinct keys so it cannot be confused with a site:
 
-The CLI walks up from the current directory looking for `.launchctl.yml`, stopping at the nearest `.git` boundary. This means you can run commands from any subdirectory of your project.
+```yaml
+server: abc123
+docker_project: prj456
+docker_application: app789
+```
+
+Once initialized, site commands automatically use the configured server and
+site. Docker commands automatically use the configured server,
+`docker_project`, and `docker_application` when the corresponding positional ID
+or flag is omitted. Explicit arguments and flags take precedence.
+
+The CLI walks up from the current directory looking for `.launchctl.yml`,
+stopping at the nearest `.git` boundary. This means commands can run from any
+subdirectory of the local repository.
 
 ---
 
@@ -656,6 +847,14 @@ lctl deploy trigger <site-id> --server <server-id> --ci --wait --timeout 600
 
 # List servers
 LAUNCHCTL_TOKEN=lctl_xxx lctl servers list --ci --json
+
+# Deploy a Docker application and wait for its terminal state
+LAUNCHCTL_TOKEN=lctl_xxx \
+LAUNCHCTL_TEAM_ID=team_abc \
+lctl docker applications deploy <application-id> \
+  --server <server-id> \
+  --project <project-id> \
+  --ci --wait --timeout 600
 ```
 
 The `--ci` flag disables interactive prompts. All required values must be provided via flags or environment variables.
@@ -663,8 +862,8 @@ The `--ci` flag disables interactive prompts. All required values must be provid
 | Flag | Description |
 |------|-------------|
 | `--ci` | Enable CI/CD mode (global flag) |
-| `--wait` | Wait for deployment to finish (deploy trigger) |
-| `--timeout` | Timeout in seconds for `--wait` (default: 300) |
+| `--wait` | Wait for a site or Docker application deployment to finish |
+| `--timeout` | Timeout in seconds for `--wait` (site default: 300; Docker application default: 600) |
 
 ### GitHub Actions Example
 
@@ -704,7 +903,8 @@ These flags are available on all commands.
 
 ## Interactive Dashboard
 
-Running `lctl` with no arguments launches the interactive TUI dashboard with navigation, server/site selection, and favorites.
+Running `lctl` with no arguments launches the interactive TUI dashboard with
+navigation for servers, sites, Docker projects and applications, and favorites.
 
 ```bash
 lctl

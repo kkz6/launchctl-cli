@@ -22,7 +22,7 @@ This is the forward-compatible escape hatch for endpoints that do not yet
 have a dedicated command. The path should include /api. Pass a JSON object or
 array with --data, or use --data @file.json.`,
 	Example: `  lctl api GET /api/servers
-  lctl api GET '/api/docker/projects?server_id=01ABC'
+  lctl api GET /api/servers/01ABC/backups
   lctl api POST /api/scripts --data '{"name":"health-check"}'
   lctl api PATCH /api/notifications/settings --data @settings.json`,
 	Args: cobra.ExactArgs(2),

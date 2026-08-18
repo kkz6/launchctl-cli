@@ -181,14 +181,14 @@ func (m Model) renderServers() string {
 			s.Name,
 			s.Provider,
 			statusStyle.Render("● " + s.Status),
-			fmt.Sprintf("%d", s.SitesCount),
+			dashboardResourceSummary(s),
 		})
 	}
 
 	t := table.New().
 		Border(lipgloss.RoundedBorder()).
 		BorderStyle(borderStyle).
-		Headers("Name", "Provider", "Status", "Sites").
+		Headers("Name", "Provider", "Status", "Resources").
 		Rows(rows...).
 		StyleFunc(func(row, col int) lipgloss.Style {
 			if row == table.HeaderRow {

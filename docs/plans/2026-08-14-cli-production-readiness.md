@@ -18,14 +18,15 @@ and render cleanly in tmux, SSH sessions, and ordinary terminals.
 | Authentication and context | `login`, `logout`, `whoami`, `teams`, `config profiles`, `switch` | Profile-specific hosted or approved development API origin |
 | Servers | `servers list/show/reboot/ssh/metrics` | `servers watch <id>` provisioning console |
 | Sites and deployments | `sites list/show`, `deploy trigger/list/show/logs/rollback` | Deployment progress and task output |
+| Docker workloads | `docker projects`, `docker applications` | Application events plus bounded deploy waiting |
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons`, `logs` | Resource events through `events` |
-| Projects and automation | `init`, `status`, `env`, `run`, `tasks` | Live dashboard, task console, JSON/NDJSON streams |
+| Repository context and automation | `init`, `status`, `env`, `run`, `tasks` | Live dashboard, task console, JSON/NDJSON streams |
 | New backend modules | `api <method> <path>` | Subscribe to authorized resource channels |
 
 High-level commands are added when a workflow benefits from validation,
 selection, tables, or a dedicated TUI. `lctl api` prevents release skew from
-blocking scripts when the backend adds Docker, backup, DNS, notification,
-script, update, or load-balancer endpoints.
+blocking scripts when the backend adds backup, DNS, notification, script,
+update, load-balancer, or advanced Docker subresource endpoints.
 
 ## Runtime architecture
 
@@ -93,7 +94,8 @@ a hosted service.
 ## Acceptance suite
 
 - Unit tests cover API URL resolution, credentials, typed errors, retries,
-  profile overrides, event filtering, request-body parsing, and live rendering.
+  profile overrides, Docker project/application route construction and safety,
+  event filtering, request-body parsing, and live rendering.
 - WebSocket integration tests force a disconnect and verify reconnect plus
   subscription replay.
 - Backend tests cover cross-team authorization, task ownership joins,

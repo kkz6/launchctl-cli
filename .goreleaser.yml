@@ -32,7 +32,7 @@ blobs:
 brews:
   - name: lctl
     homepage: "https://launchctl.io"
-    description: "CLI for managing launchctl servers, sites, and deployments"
+    description: "CLI for managing launchctl servers, sites, Docker projects, applications, and deployments"
     license: "Proprietary"
     directory: Formula
     url_template: "https://sin1.contabostorage.com/2fac7399ecc245c4b352abf9eb154e1d:launchctl-cli/{{ .Tag }}/{{ .ArtifactName }}"

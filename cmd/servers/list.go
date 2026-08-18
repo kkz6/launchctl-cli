@@ -43,11 +43,11 @@ var listCmd = &cobra.Command{
 				s.TypeLabel,
 				output.StatusDot(s.Status),
 				ip,
-				fmt.Sprintf("%d", s.SitesCount),
+				serverResourceSummary(s),
 			})
 		}
 
-		output.RenderTable("Servers", []string{"ID", "Name", "Provider", "Type", "Status", "IP", "Sites"}, rows)
+		output.RenderTable("Servers", []string{"ID", "Name", "Provider", "Type", "Status", "IP", "Resources"}, rows)
 		return nil
 	},
 }

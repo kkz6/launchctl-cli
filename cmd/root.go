@@ -10,6 +10,7 @@ import (
 	"github.com/kkz6/launchctl/cmd/daemons"
 	"github.com/kkz6/launchctl/cmd/databases"
 	"github.com/kkz6/launchctl/cmd/deploy"
+	"github.com/kkz6/launchctl/cmd/docker"
 	"github.com/kkz6/launchctl/cmd/env"
 	"github.com/kkz6/launchctl/cmd/firewall"
 	"github.com/kkz6/launchctl/cmd/servers"
@@ -41,8 +42,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "lctl",
-	Short: "CLI for managing launchctl servers, sites, and deployments",
-	Long:  "lctl is a command-line tool for managing your launchctl servers, sites, and deployments.",
+	Short: "CLI for managing launchctl infrastructure and applications",
+	Long:  "lctl manages launchctl servers, sites, Docker projects and applications, and deployments.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if err := tui.ConfigureTheme(os.Getenv("LAUNCHCTL_THEME")); err != nil {
 			return err
@@ -149,6 +150,7 @@ func init() {
 	rootCmd.AddCommand(servers.ServersCmd)
 	rootCmd.AddCommand(sites.SitesCmd)
 	rootCmd.AddCommand(deploy.DeployCmd)
+	rootCmd.AddCommand(docker.DockerCmd)
 	rootCmd.AddCommand(teams.TeamsCmd)
 	rootCmd.AddCommand(tasks.TasksCmd)
 	rootCmd.AddCommand(env.EnvCmd)

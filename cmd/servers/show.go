@@ -58,7 +58,9 @@ var showCmd = &cobra.Command{
 			fmt.Println(tui.Label.Render("Storage:") + tui.Value.Render(fmt.Sprintf("%d GB", *server.StorageInGB)))
 		}
 
-		fmt.Println(tui.Label.Render("Sites:") + tui.Value.Render(fmt.Sprintf("%d", server.SitesCount)))
+		for _, resource := range serverResourceCounts(*server) {
+			fmt.Println(tui.Label.Render(resource.Label+":") + tui.Value.Render(fmt.Sprintf("%d", resource.Count)))
+		}
 		fmt.Println(tui.Label.Render("Created:") + tui.Value.Render(server.CreatedAt))
 		fmt.Println()
 

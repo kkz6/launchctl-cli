@@ -1,9 +1,10 @@
 # lctl
 
-`lctl` is the launchctl terminal client for servers, sites, deployments, and
-day-to-day infrastructure operations. It combines scriptable Cobra commands,
-Bubble Tea views that work cleanly in tmux, resilient WebSocket progress, and
-an authenticated raw API escape hatch for every backend feature.
+`lctl` is the launchctl terminal client for servers, sites, Docker projects and
+applications, deployments, and day-to-day infrastructure operations. It
+combines scriptable Cobra commands, Bubble Tea views that work cleanly in tmux,
+resilient WebSocket progress, and an authenticated raw API escape hatch for
+every backend feature.
 
 launchctl is currently a hosted service. The CLI does not install or operate a
 self-managed launchctl control plane.
@@ -46,7 +47,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.5
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.3.0
 codex plugin add launchctl@launchctl
 ```
 
@@ -61,6 +62,12 @@ lctl whoami
 lctl servers list
 lctl init
 lctl deploy trigger <site-id>
+
+# Docker application workflow
+lctl docker projects list --server <docker-server-id>
+lctl docker applications list \
+  --server <docker-server-id> \
+  --project <project-id>
 ```
 
 Run `lctl` without a subcommand for the interactive navigator, or use
@@ -95,6 +102,7 @@ run `lctl ai update` after updating `lctl` to install the newly bundled files.
 | Servers | `servers list/show/reboot/ssh/metrics/watch` |
 | Sites | `sites list/show`, `env pull/push`, `logs`, `run` |
 | Deployments | `deploy trigger/list/show/logs/rollback` |
+| Docker | `docker projects list/show/create/update/delete`, `docker applications list/show/create/update/deploy/reload/start/stop/deployments/delete` |
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons` |
 | Live work | `status`, `events`, `tasks list/watch` |
 | CLI lifecycle | `version`, `update`, `update --check` |
@@ -125,8 +133,8 @@ available immediately through the authenticated client:
 
 ```bash
 lctl api GET /api/servers/<server-id>/backups
-lctl api GET /api/servers/<server-id>/docker/projects
 lctl api POST /api/scripts --data @script.json
+lctl api GET /api/settings/notifications
 ```
 
 `lctl api` applies the active token, team, profile, API origin, safe-read
@@ -140,8 +148,9 @@ lctl config profiles use staging
 lctl --profile staging servers list
 ```
 
-Configuration lives at `~/.config/launchctl/config.json`; project defaults live
-in `.launchctl.yml`. Runtime environment variables are:
+Configuration lives at `~/.config/launchctl/config.json`; site or Docker
+application context lives in `.launchctl.yml`. Runtime environment variables
+are:
 
 - `LAUNCHCTL_API_URL`
 - `LAUNCHCTL_TOKEN`
@@ -166,7 +175,7 @@ clients:
 
 ```bash
 make splash-preview
-go run ./internal/splash/preview --width 28 --color never --version 0.2.5
+go run ./internal/splash/preview --width 28 --color never --version 0.3.0
 ```
 
 See [the CLI reference](docs/cli-reference.md) and the

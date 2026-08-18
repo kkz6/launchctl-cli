@@ -11,8 +11,10 @@ import (
 const projectConfigFile = ".launchctl.yml"
 
 type ProjectConfig struct {
-	Server string `yaml:"server"`
-	Site   string `yaml:"site"`
+	Server            string `json:"server" yaml:"server"`
+	Site              string `json:"site,omitempty" yaml:"site,omitempty"`
+	DockerProject     string `json:"docker_project,omitempty" yaml:"docker_project,omitempty"`
+	DockerApplication string `json:"docker_application,omitempty" yaml:"docker_application,omitempty"`
 }
 
 func LoadProject() (*ProjectConfig, error) {

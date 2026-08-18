@@ -211,6 +211,20 @@ func (m selectionModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
+
+	case tea.MouseMsg:
+		if msg.Action != tea.MouseActionPress {
+			return m, nil
+		}
+
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.list.CursorUp()
+		case tea.MouseButtonWheelDown:
+			m.list.CursorDown()
+		default:
+			return m, nil
+		}
 	}
 
 	var cmd tea.Cmd
@@ -241,7 +255,7 @@ func (m selectionModel) View() string {
 	helpStyle := lipgloss.NewStyle().
 		Foreground(Muted)
 
-	helpText := helpStyle.Render("↑/k up • ↓/j down • 1-9 quick select • enter select • esc cancel")
+	helpText := helpStyle.Render("↑/↓, j/k, or scroll navigate • 1-9 quick select • enter select • esc cancel")
 
 	notifyBar := notify.Render()
 
@@ -352,7 +366,7 @@ func SelectFromList(title string, options []string, actions ...string) (int, err
 		choice: -1,
 	}
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithMouseCellMotion())
 	finalModel, err := p.Run()
 	if err != nil {
 		return -1, fmt.Errorf("error running selection: %w", err)
@@ -449,7 +463,7 @@ func SelectFromTable(title string, columns []TableColumn, rows []TableRow, actio
 		tableWidths:  widths,
 	}
 
-	p := tea.NewProgram(m)
+	p := tea.NewProgram(m, tea.WithMouseCellMotion())
 	finalModel, err := p.Run()
 	if err != nil {
 		return -1, fmt.Errorf("error running selection: %w", err)

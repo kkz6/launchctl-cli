@@ -3,10 +3,10 @@ package api
 import "time"
 
 type APIResponse[T any] struct {
-	Success bool              `json:"success"`
-	Message string            `json:"message"`
-	Data    T                 `json:"data"`
-	Meta    *PaginationMeta   `json:"meta,omitempty"`
+	Success bool                `json:"success"`
+	Message string              `json:"message"`
+	Data    T                   `json:"data"`
+	Meta    *PaginationMeta     `json:"meta,omitempty"`
 	Errors  map[string][]string `json:"errors,omitempty"`
 }
 
@@ -101,6 +101,8 @@ type ServerResponse struct {
 	UpdatedAt             string   `json:"updated_at"`
 	Features              []string `json:"features,omitempty"`
 	SitesCount            int      `json:"sites_count"`
+	ProjectsCount         int      `json:"projects_count"`
+	WorkloadsCount        int      `json:"workloads_count"`
 	ServicesCount         int      `json:"services_count"`
 	UpstreamsCount        int      `json:"upstreams_count"`
 }
@@ -121,25 +123,25 @@ type MetricResponse struct {
 }
 
 type SiteResponse struct {
-	ID                           string              `json:"id"`
-	ServerID                     string              `json:"server_id"`
-	Address                      string              `json:"address"`
-	Type                         string              `json:"type"`
-	TLSSetting                   string              `json:"tls_setting"`
-	ZeroDowntimeDeployment       bool                `json:"zero_downtime_deployment"`
-	DeploymentReleasesRetention  int                 `json:"deployment_releases_retention"`
-	RepositoryBranch             string              `json:"repository_branch"`
-	Path                         string              `json:"path"`
-	WebFolder                    string              `json:"web_folder"`
-	PHPVersion                   string              `json:"php_version"`
-	AutoDeployment               bool                `json:"auto_deployment"`
-	URL                          string              `json:"url"`
-	RepositoryURL                *string             `json:"repository_url,omitempty"`
-	Status                       string              `json:"status"`
-	InstalledAt                  *string             `json:"installed_at,omitempty"`
-	LatestDeployment             *DeploymentResponse `json:"latest_deployment,omitempty"`
-	CreatedAt                    string              `json:"created_at"`
-	UpdatedAt                    string              `json:"updated_at"`
+	ID                          string              `json:"id"`
+	ServerID                    string              `json:"server_id"`
+	Address                     string              `json:"address"`
+	Type                        string              `json:"type"`
+	TLSSetting                  string              `json:"tls_setting"`
+	ZeroDowntimeDeployment      bool                `json:"zero_downtime_deployment"`
+	DeploymentReleasesRetention int                 `json:"deployment_releases_retention"`
+	RepositoryBranch            string              `json:"repository_branch"`
+	Path                        string              `json:"path"`
+	WebFolder                   string              `json:"web_folder"`
+	PHPVersion                  string              `json:"php_version"`
+	AutoDeployment              bool                `json:"auto_deployment"`
+	URL                         string              `json:"url"`
+	RepositoryURL               *string             `json:"repository_url,omitempty"`
+	Status                      string              `json:"status"`
+	InstalledAt                 *string             `json:"installed_at,omitempty"`
+	LatestDeployment            *DeploymentResponse `json:"latest_deployment,omitempty"`
+	CreatedAt                   string              `json:"created_at"`
+	UpdatedAt                   string              `json:"updated_at"`
 }
 
 var siteTypeLabels = map[string]string{
@@ -196,24 +198,26 @@ type DashboardResponse struct {
 }
 
 type DashboardServer struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	Status     string `json:"status"`
-	Provider   string `json:"provider"`
-	SitesCount int    `json:"sites_count"`
+	ID             string `json:"id"`
+	Name           string `json:"name"`
+	Status         string `json:"status"`
+	Provider       string `json:"provider"`
+	Type           string `json:"type"`
+	SitesCount     int    `json:"sites_count"`
+	WorkloadsCount int    `json:"workloads_count"`
 }
 
 type DashboardActivity struct {
-	ID            string         `json:"id"`
-	SiteName      string         `json:"site_name"`
-	SiteID        string         `json:"site_id"`
-	ServerID      string         `json:"server_id"`
-	ServerName    string         `json:"server_name"`
-	Status        string         `json:"status"`
-	CreatedAt     string         `json:"created_at"`
-	CommitSHA     string         `json:"commit_sha,omitempty"`
-	CommitMessage string         `json:"commit_message,omitempty"`
-	User          *ActivityUser  `json:"user,omitempty"`
+	ID            string        `json:"id"`
+	SiteName      string        `json:"site_name"`
+	SiteID        string        `json:"site_id"`
+	ServerID      string        `json:"server_id"`
+	ServerName    string        `json:"server_name"`
+	Status        string        `json:"status"`
+	CreatedAt     string        `json:"created_at"`
+	CommitSHA     string        `json:"commit_sha,omitempty"`
+	CommitMessage string        `json:"commit_message,omitempty"`
+	User          *ActivityUser `json:"user,omitempty"`
 }
 
 type ActivityUser struct {
@@ -240,10 +244,10 @@ type CreateServerRequest struct {
 }
 
 type CreateServerOptions struct {
-	Providers       []ProviderOption `json:"providers"`
-	OperatingSystems []SelectOption  `json:"operating_systems"`
-	Types           []SelectOption   `json:"types"`
-	PHPVersions     []SelectOption   `json:"php_versions,omitempty"`
+	Providers        []ProviderOption `json:"providers"`
+	OperatingSystems []SelectOption   `json:"operating_systems"`
+	Types            []SelectOption   `json:"types"`
+	PHPVersions      []SelectOption   `json:"php_versions,omitempty"`
 }
 
 type ProviderOption struct {
@@ -260,11 +264,11 @@ type SelectOption struct {
 }
 
 type CreateSiteRequest struct {
-	Address        string `json:"address"`
-	Type           string `json:"type"`
-	PHPVersion     string `json:"php_version,omitempty"`
-	WebFolder      string `json:"web_folder,omitempty"`
-	ZeroDowntime   bool   `json:"zero_downtime_deployment"`
+	Address      string `json:"address"`
+	Type         string `json:"type"`
+	PHPVersion   string `json:"php_version,omitempty"`
+	WebFolder    string `json:"web_folder,omitempty"`
+	ZeroDowntime bool   `json:"zero_downtime_deployment"`
 }
 
 type SwitchTeamRequest struct {
@@ -500,4 +504,3 @@ type CreateDaemonRequest struct {
 	StopWaitSeconds int     `json:"stop_wait_seconds,omitempty"`
 	StopSignal      *string `json:"stop_signal,omitempty"`
 }
-

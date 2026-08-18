@@ -17,8 +17,9 @@ and use `lctl api` only for backend resources without a dedicated command.
    software unless the user asks.
 3. Run `lctl whoami --json` before account-specific work. Never print, inspect,
    or persist the token itself.
-4. Inspect `lctl config show` and `.launchctl.yml` when server or site context
-   matters. Pass `--profile` when the user identifies a non-active profile.
+4. Inspect `lctl config show` and `.launchctl.yml` when server, site, Docker
+   project, or application context matters. Pass `--profile` when the user
+   identifies a non-active profile.
 5. Resolve human names to immutable IDs through list commands. Do not guess IDs.
 
 Read [references/commands.md](references/commands.md) when choosing a command or
@@ -26,8 +27,9 @@ when the request spans more than one resource family.
 
 Read [references/docker-applications.md](references/docker-applications.md)
 before creating, configuring, deploying, troubleshooting, or deleting a Docker
-project or application. Docker workloads currently use confirmed API routes
-through `lctl api`; do not substitute the PHP/static site deployment commands.
+project or application. Use the typed `lctl docker projects` and
+`lctl docker applications` commands for core workflows; do not substitute the
+PHP/static site deployment commands.
 
 ## Choose the safest interface
 
@@ -91,22 +93,29 @@ Never echo these values and never invent self-hosting instructions.
 ### Deploy a Docker application
 
 1. Resolve the Docker server with `lctl servers list --json`.
-2. List projects and applications through the confirmed paths in
-   [references/docker-applications.md](references/docker-applications.md).
-3. Inspect the application, source type, build location, internal port, and
-   current status before changing it.
-4. Start an event watcher before the mutation when practical, then POST the
-   application's `/deploy` endpoint.
+2. Resolve the project with `lctl docker projects list --server <server-id>
+   --json`, then resolve the application with `lctl docker applications list
+   --server <server-id> --project <project-id> --json`.
+3. Run `lctl docker applications show <application-id> --server <server-id>
+   --project <project-id> --json` and inspect its source type, build location,
+   internal port, and current status before changing it.
+4. Start an event watcher before the mutation when practical, then run
+   `lctl docker applications deploy <application-id> --server <server-id>
+   --project <project-id>`. Use `--wait --timeout <seconds>` for a bounded
+   foreground deployment.
 5. Follow events for the target `application_id`. Treat `deploying` as
    in-progress, `deployed` as terminal success, and `failed` as terminal
    failure. GitHub Actions step events are supporting progress, not final
    application state.
-6. Re-fetch the application and its deployments after the terminal event. Do
-   not report success solely from the queued API response or WebSocket event.
+6. Re-fetch the application with `docker applications show` and its history
+   with `docker applications deployments` after the terminal event. Do not
+   report success solely from the queued API response or WebSocket event.
 
-Use `reload` only when the user wants to restart the existing container. Saved
-runtime environment or container configuration requires a deploy because the
-current reload endpoint does not recreate the container.
+Use `reload` when the user wants to recreate the container from the image
+already present on the server while applying the current runtime environment
+and container configuration. Reload does not rebuild or pull an image and does
+not add a deployment-history row. Use `deploy` when the source image or build
+must be refreshed.
 
 ### Watch infrastructure in tmux
 
@@ -128,8 +137,9 @@ JSON objects.
   and never put registry passwords or secrets directly in a shell command when
   a JSON request file or saved credential can be used.
 - Preserve Docker named volumes on application deletion unless the user
-  explicitly authorizes `remove_volumes=true` after reviewing the target.
+  explicitly authorizes the `--remove-volumes` flag after reviewing the target.
 - Distinguish Docker **Deploy/Rebuild** from **Reload**: deploy rebuilds or pulls
-  the source image and recreates the container; reload only restarts it.
+  the source and recreates the container; reload reuses the on-server image but
+  recreates the container with its current environment and configuration.
 - If WebSocket progress is interrupted, rely on the client's reconnect first,
   then reconcile through REST before declaring the operation failed.

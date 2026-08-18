@@ -31,3 +31,29 @@ func SiteID(flagValue string) (string, error) {
 
 	return "", fmt.Errorf("--site flag is required (or run `lctl init` to set a default)")
 }
+
+func ProjectID(flagValue string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+
+	proj, err := config.LoadProject()
+	if err == nil && proj.DockerProject != "" {
+		return proj.DockerProject, nil
+	}
+
+	return "", fmt.Errorf("--project flag is required (or run `lctl init` to set a default)")
+}
+
+func ApplicationID(flagValue string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+
+	proj, err := config.LoadProject()
+	if err == nil && proj.DockerApplication != "" {
+		return proj.DockerApplication, nil
+	}
+
+	return "", fmt.Errorf("--application flag is required (or run `lctl init` to set a default)")
+}
