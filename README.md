@@ -46,7 +46,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.3
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.4
 codex plugin add launchctl@launchctl
 ```
 
@@ -165,7 +165,7 @@ clients:
 
 ```bash
 make splash-preview
-go run ./internal/splash/preview --width 28 --color never --version 0.2.3
+go run ./internal/splash/preview --width 28 --color never --version 0.2.4
 ```
 
 See [the CLI reference](docs/cli-reference.md) and the

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const (
@@ -12,7 +13,10 @@ const (
 	configFile = "config.json"
 )
 
-const DefaultAPIURL = "https://launchctl.io"
+const (
+	DefaultAPIURL   = "https://api.launchctl.io"
+	legacyHostedURL = "https://launchctl.io"
+)
 
 type Favorite struct {
 	ServerID    string `json:"server_id"`
@@ -320,6 +324,13 @@ func (c *Config) ActivateProfile(name string) error {
 // WebSocket clients always resolve the same endpoint.
 func (c *Config) EffectiveAPIURL() string {
 	if c != nil && c.APIURL != "" {
+		// Profiles created before the API moved to its own host still contain
+		// the frontend origin. Treat those values as the hosted default so an
+		// existing login starts working without requiring a config rewrite.
+		legacyURL := strings.TrimRight(c.APIURL, "/")
+		if legacyURL == legacyHostedURL || legacyURL == legacyHostedURL+"/api" {
+			return DefaultAPIURL
+		}
 		return c.APIURL
 	}
 	return DefaultAPIURL

@@ -17,6 +17,19 @@ func TestEffectiveAPIURLAndEnvironmentOverrides(t *testing.T) {
 	}
 }
 
+func TestEffectiveAPIURLMigratesLegacyHostedOrigin(t *testing.T) {
+	for _, legacyURL := range []string{
+		"https://launchctl.io",
+		"https://launchctl.io/",
+		"https://launchctl.io/api",
+	} {
+		cfg := &Config{APIURL: legacyURL}
+		if got := cfg.EffectiveAPIURL(); got != DefaultAPIURL {
+			t.Fatalf("EffectiveAPIURL() for %q = %q, want %q", legacyURL, got, DefaultAPIURL)
+		}
+	}
+}
+
 func TestActivateProfileIncludesAPIURL(t *testing.T) {
 	cfg := &Config{Profiles: map[string]*Profile{
 		"staging": {APIURL: "https://staging.example", AccessToken: "secret", TeamID: "team-a"},

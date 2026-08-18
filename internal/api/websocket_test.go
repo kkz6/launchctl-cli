@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ func TestWSManagerReconnectsAndReplaysSubscriptions(t *testing.T) {
 	upgrader := websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/ws" || r.URL.Query().Get("token") != "jwt" || r.URL.Query().Get("team_id") != "team-a" {
+		if r.URL.Path != "/ws" || r.URL.Query().Get("token") != "jwt" || r.URL.Query().Get("team_id") != "team-a" {
 			serverErrors <- r.URL.String()
 			w.WriteHeader(http.StatusBadRequest)
 			return
@@ -85,5 +86,35 @@ func TestWSManagerRejectsMalformedChannel(t *testing.T) {
 		if err := manager.Subscribe(channel); err == nil {
 			t.Fatalf("Subscribe(%q) succeeded", channel)
 		}
+	}
+}
+
+func TestBuildWebSocketURLResolvesCurrentAndLegacyAPIPaths(t *testing.T) {
+	query := url.Values{"token": {"jwt"}}
+	for _, test := range []struct {
+		name     string
+		baseURL  string
+		expected string
+	}{
+		{
+			name:     "current root API",
+			baseURL:  "https://api.launchctl.io",
+			expected: "wss://api.launchctl.io/terminal/logs?token=jwt",
+		},
+		{
+			name:     "legacy prefixed API",
+			baseURL:  "https://staging.example/api",
+			expected: "wss://staging.example/api/terminal/logs?token=jwt",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			got, err := buildWebSocketURL(test.baseURL, "/api/terminal/logs", query)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != test.expected {
+				t.Fatalf("buildWebSocketURL() = %q, want %q", got, test.expected)
+			}
+		})
 	}
 }

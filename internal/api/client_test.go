@@ -38,6 +38,21 @@ func TestRawRequestAddsAuthAndResolvesAPIBase(t *testing.T) {
 	}
 }
 
+func TestRawRequestResolvesAPINamespaceAgainstRootBase(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/servers" || r.URL.RawQuery != "page=2" {
+			t.Fatalf("unexpected URL: %s", r.URL.String())
+		}
+		_ = json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	}))
+	defer server.Close()
+
+	client := NewClient(&config.Config{APIURL: server.URL})
+	if _, _, err := client.RawRequest(context.Background(), http.MethodGet, "/api/servers?page=2", nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestGETRetriesTransientFailure(t *testing.T) {
 	var attempts atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

@@ -107,10 +107,7 @@ func Connect(cfg *config.Config, opts Options) error {
 
 func buildURL(cfg *config.Config, opts Options) (string, error) {
 	baseURL := strings.TrimRight(cfg.EffectiveAPIURL(), "/")
-	endpoint := "/api/terminal/ws"
-	if strings.HasSuffix(baseURL, "/api") {
-		endpoint = "/terminal/ws"
-	}
+	endpoint := "/terminal/ws"
 	u, err := url.Parse(baseURL + endpoint)
 	if err != nil {
 		return "", err

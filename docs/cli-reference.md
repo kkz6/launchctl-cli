@@ -136,7 +136,7 @@ overwritten or removed.
 Install the plugin from the GitHub repository at the matching CLI release tag:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.3
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.2.4
 codex plugin add launchctl@launchctl
 ```
 

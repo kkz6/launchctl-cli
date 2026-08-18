@@ -39,7 +39,7 @@ Cobra command / Bubble Tea model
         │     └── retry GET/HEAD/OPTIONS on transient failures
         │
         └── WS manager
-              ├── one authenticated /api/ws connection
+              ├── one authenticated /ws connection
               ├── ping/pong deadlines
               ├── exponential reconnect with jitter
               ├── subscription registry + replay
@@ -72,7 +72,7 @@ Highest to lowest:
 1. `--api-url`, `--profile`
 2. `LAUNCHCTL_API_URL`, `LAUNCHCTL_TOKEN`, `LAUNCHCTL_TEAM_ID`
 3. active profile in `~/.config/launchctl/config.json`
-4. `https://launchctl.io`
+4. `https://api.launchctl.io`
 
 API origins are stored per profile so production and approved launchctl
 development or staging accounts can coexist without separate config files.

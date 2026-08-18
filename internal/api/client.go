@@ -238,10 +238,16 @@ func resolveRequestURL(baseURL, requestPath string) (string, error) {
 		return "", fmt.Errorf("invalid request path %q: %w", requestPath, err)
 	}
 	path := "/" + strings.TrimLeft(requested.Path, "/")
-	basePath := strings.TrimRight(base.Path, "/")
-	if basePath == "/api" && strings.HasPrefix(path, "/api/") {
+	// lctl historically exposed /api-prefixed paths while the Go API now
+	// serves routes from its host root. Keep accepting the public CLI path
+	// format and translate it at the transport boundary. A custom base URL
+	// ending in /api retains that prefix for legacy development deployments.
+	if path == "/api" {
+		path = "/"
+	} else if strings.HasPrefix(path, "/api/") {
 		path = strings.TrimPrefix(path, "/api")
 	}
+	basePath := strings.TrimRight(base.Path, "/")
 	base.Path = basePath + path
 	base.RawQuery = requested.RawQuery
 	base.Fragment = ""
