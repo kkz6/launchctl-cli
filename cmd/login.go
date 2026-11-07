@@ -1,107 +1,152 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
+	"net/url"
+	"os/exec"
+	"runtime"
+	"strings"
+	"time"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/kkz6/launchctl/internal/api"
-	"github.com/kkz6/launchctl/internal/tui"
+	"github.com/kkz6/launchctl/internal/commandutil"
+	"github.com/kkz6/launchctl/internal/config"
 	"github.com/spf13/cobra"
 )
 
-var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Authenticate with an API token",
-	Long:  "Authenticate using a personal access token generated from the web dashboard.",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println()
-		fmt.Println(tui.Title.Render("  Login to lctl"))
-		fmt.Println(tui.Dim.Render("  Generate a token at https://launchctl.io/settings/api-tokens"))
-		fmt.Println()
+func newBrowserLoginCommand(name string) *cobra.Command {
+	var noBrowser bool
+	command := &cobra.Command{
+		Use: name, Short: "Sign in through your browser using a one-time code",
+		Args: cobra.NoArgs, SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return browserLogin(cmd, cfg, noBrowser, openLoginBrowser, waitForLoginPoll)
+		},
+	}
+	command.Flags().BoolVar(&noBrowser, "no-browser", false, "Print the sign-in URL without opening a browser")
+	return command
+}
 
-		token, err := tui.GetInput(
-			"API Token",
-			"lctl_xxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-			true,
-			func(s string) error {
-				if s == "" {
-					return fmt.Errorf("token is required")
-				}
-				return nil
-			},
-		)
-		if err != nil {
-			return err
+func browserLogin(cmd *cobra.Command, configuration *config.Config, noBrowser bool, open func(context.Context, string) error, wait func(context.Context, time.Duration) error) error {
+	ci, _ := cmd.Flags().GetBool("ci")
+	if ci {
+		return fmt.Errorf("browser sign-in needs your approval; run lctl auth without --ci")
+	}
+	// Starting a new sign-in must not send credentials from a previous session.
+	client := api.NewClient(&config.Config{APIURL: configuration.EffectiveAPIURL()})
+	requestCtx, requestCancel := context.WithTimeout(cmd.Context(), 30*time.Second)
+	authorization, err := client.StartDeviceAuthorization(requestCtx)
+	requestCancel()
+	if err != nil {
+		return fmt.Errorf("could not start browser sign-in: %w", err)
+	}
+	if err := validateDeviceAuthorization(authorization); err != nil {
+		return err
+	}
+
+	fmt.Fprintf(cmd.ErrOrStderr(), "Your one-time code: %s\nOpen %s, sign in, and enter this code to approve lctl.\n", authorization.UserCode, authorization.VerificationURI)
+	ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(authorization.ExpiresIn)*time.Second)
+	defer cancel()
+	if !noBrowser {
+		browserCtx, browserCancel := context.WithTimeout(ctx, 5*time.Second)
+		openErr := open(browserCtx, authorization.VerificationURI)
+		browserCancel()
+		if openErr != nil {
+			fmt.Fprintln(cmd.ErrOrStderr(), "Could not open a browser. Open the URL above to continue.")
 		}
-
-		client := api.NewClient(cfg)
-
-		user, err := client.ValidateToken(token)
-		if err != nil {
-			return fmt.Errorf("invalid token: %w", err)
+	}
+	interval := time.Duration(authorization.Interval) * time.Second
+	for {
+		if err := wait(ctx, interval); err != nil {
+			return fmt.Errorf("browser sign-in stopped: %w", err)
 		}
-
-		cfg.AccessToken = token
-
-		if user.TwoFactorEnabled {
-			fmt.Println()
-
-			code, err := tui.GetInput(
-				"Two-Factor Authentication",
-				"000000",
-				false,
-				func(s string) error {
-					if s == "" {
-						return fmt.Errorf("two-factor code is required")
-					}
-					return nil
-				},
-			)
+		result, err := client.PollDeviceAuthorization(ctx, authorization.DeviceCode)
+		if err != nil {
+			return fmt.Errorf("could not finish browser sign-in: %w", err)
+		}
+		switch result.Status {
+		case "pending":
+			continue
+		case "slow_down":
+			interval += 5 * time.Second
+			continue
+		case "denied":
+			return fmt.Errorf("browser sign-in was denied")
+		case "expired":
+			return fmt.Errorf("the sign-in code expired; run lctl auth again")
+		case "approved":
+			if result.AccessToken == "" {
+				return fmt.Errorf("browser sign-in returned no credential")
+			}
+			// Confirm identity through the issued credential before persisting it.
+			identityClient := api.NewClient(&config.Config{APIURL: configuration.EffectiveAPIURL(), AccessToken: result.AccessToken})
+			user, err := identityClient.GetUserContext(ctx)
 			if err != nil {
-				cfg.AccessToken = ""
-				return err
+				return fmt.Errorf("could not verify browser sign-in: %w", err)
 			}
-
-			if err := client.VerifyTwoFactor(code); err != nil {
-				cfg.AccessToken = ""
-				return fmt.Errorf("two-factor verification failed: %w", err)
+			if user.ID == "" {
+				return fmt.Errorf("browser sign-in returned no user identity")
 			}
+			configuration.AccessToken = result.AccessToken
+			configuration.UserID, configuration.UserName, configuration.UserEmail = user.ID, user.Name, user.Email
+			configuration.TeamID, configuration.TeamName = "", ""
+			if user.CurrentTeam != nil {
+				configuration.TeamID, configuration.TeamName = user.CurrentTeam.ID, user.CurrentTeam.Name
+			} else if user.CurrentTeamID != nil {
+				configuration.TeamID = *user.CurrentTeamID
+			}
+			if err := configuration.Save(); err != nil {
+				return fmt.Errorf("could not save sign-in: %w", err)
+			}
+			if commandutil.JSONEnabled(cmd) {
+				return commandutil.WriteJSON(cmd, map[string]any{"authenticated": true, "user": user})
+			}
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "Signed in as %s (%s).\n", user.Name, user.Email)
+			return err
+		default:
+			return fmt.Errorf("browser sign-in returned an unknown status")
 		}
+	}
+}
 
-		cfg.UserID = user.ID
-		cfg.UserName = user.Name
-		cfg.UserEmail = user.Email
+func validateDeviceAuthorization(value *api.DeviceAuthorization) error {
+	if value.DeviceCode == "" || len(value.UserCode) != 8 || strings.Trim(value.UserCode, "0123456789") != "" || value.ExpiresIn < 1 || value.ExpiresIn > 900 || value.Interval < 1 || value.Interval > 60 {
+		return fmt.Errorf("invalid browser sign-in response")
+	}
+	uri, err := url.Parse(value.VerificationURI)
+	if err != nil || uri.Host == "" || uri.User != nil || uri.RawQuery != "" || uri.Fragment != "" {
+		return fmt.Errorf("invalid browser sign-in URL")
+	}
+	local := uri.Hostname() == "localhost" || uri.Hostname() == "127.0.0.1" || uri.Hostname() == "::1"
+	if uri.Scheme != "https" && !(uri.Scheme == "http" && local) {
+		return fmt.Errorf("browser sign-in requires an HTTPS URL")
+	}
+	return nil
+}
 
-		if user.CurrentTeam != nil {
-			cfg.TeamID = user.CurrentTeam.ID
-			cfg.TeamName = user.CurrentTeam.Name
-		} else if user.CurrentTeamID != nil {
-			cfg.TeamID = *user.CurrentTeamID
-		}
-
-		if err := cfg.Save(); err != nil {
-			return fmt.Errorf("failed to save credentials: %w", err)
-		}
-
-		labelStyle := lipgloss.NewStyle().Foreground(tui.Slate).Width(12)
-		valueStyle := lipgloss.NewStyle().Foreground(tui.White)
-
-		var content string
-		content += tui.Success.Render("Logged in successfully") + "\n\n"
-		content += labelStyle.Render("User") + valueStyle.Render(user.Name) + "\n"
-		content += labelStyle.Render("Email") + valueStyle.Render(user.Email)
-		if cfg.TeamName != "" {
-			content += "\n" + labelStyle.Render("Team") + valueStyle.Render(cfg.TeamName)
-		}
-
-		fmt.Println()
-		fmt.Println(tui.BoxStyle.Width(60).Render(content))
-		fmt.Println()
-
+func waitForLoginPoll(ctx context.Context, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
 		return nil
-	},
+	}
 }
 
-func init() {
-	rootCmd.AddCommand(loginCmd)
+func openLoginBrowser(ctx context.Context, uri string) error {
+	var command *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		command = exec.CommandContext(ctx, "open", uri)
+	case "linux":
+		command = exec.CommandContext(ctx, "xdg-open", uri)
+	default:
+		return fmt.Errorf("automatic browser opening is unsupported")
+	}
+	return command.Run()
 }
+
+func init() { rootCmd.AddCommand(newBrowserLoginCommand("login")) }

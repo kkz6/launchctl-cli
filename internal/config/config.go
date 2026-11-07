@@ -148,7 +148,19 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	file, err := os.CreateTemp(dir, ".config-*")
+	if err != nil {
+		return fmt.Errorf("failed to stage config: %w", err)
+	}
+	defer os.Remove(file.Name())
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return fmt.Errorf("failed to write config: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("failed to close config: %w", err)
+	}
+	if err := os.Rename(file.Name(), path); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 

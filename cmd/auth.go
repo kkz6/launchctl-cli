@@ -9,10 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var authCmd = &cobra.Command{
-	Use:   "auth",
-	Short: "Manage authentication",
-}
+var authCmd = newBrowserLoginCommand("auth")
 
 var authStatusCmd = &cobra.Command{
 	Use:   "status",
@@ -72,6 +69,7 @@ var authStatusCmd = &cobra.Command{
 }
 
 func init() {
+	authCmd.AddCommand(newBrowserLoginCommand("login"))
 	authCmd.AddCommand(authStatusCmd)
 	rootCmd.AddCommand(authCmd)
 }

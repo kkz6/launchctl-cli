@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 )
 
@@ -48,7 +49,11 @@ func (c *Client) Logout() error {
 }
 
 func (c *Client) GetUser() (*UserResponse, error) {
-	resp, err := c.doRequest(http.MethodGet, "/api/auth/user", nil)
+	return c.GetUserContext(context.Background())
+}
+
+func (c *Client) GetUserContext(ctx context.Context) (*UserResponse, error) {
+	resp, err := c.doRequestContext(ctx, http.MethodGet, "/api/auth/user", nil)
 	if err != nil {
 		return nil, err
 	}
