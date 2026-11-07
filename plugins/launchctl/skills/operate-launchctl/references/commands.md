@@ -25,7 +25,8 @@ After a binary update, update the separately managed skill with
 
 | Outcome | Command |
 | --- | --- |
-| Authenticate | `lctl login` |
+| Browser sign-in | `lctl auth`, `lctl auth login`, `lctl login` |
+| Sign in on a headless machine | `lctl auth --no-browser` (user approves in browser) |
 | Check identity/team | `lctl whoami --json` |
 | Check token status | `lctl auth status` |
 | List/switch teams | `lctl teams list`, `lctl teams switch` |
@@ -42,8 +43,14 @@ After a binary update, update the separately managed skill with
 | List/show server | `lctl servers list`, `servers show <id>` |
 | Provisioning events | `lctl servers watch <id>` |
 | Metrics | `lctl servers metrics <id> [--watch]` |
-| Reboot | `lctl servers reboot <id>` |
+| Creation options | `lctl servers create-options` |
+| Create/update server | `lctl servers create`, `lctl servers update [server-id]` |
+| Retry/check connection | `lctl servers retry-provision [server-id] --yes`, `lctl servers try-connection [server-id] --yes` |
+| Archive/restore record | `lctl servers archive [server-id] --yes`, `lctl servers unarchive [server-id]` |
+| Reboot | `lctl servers reboot [server-id] --yes` |
 | Terminal | `lctl servers ssh <id> [--user <name>]` |
+| Create/update/delete site | `lctl sites create`, `lctl sites update [site-id]`, `lctl sites delete [site-id] --yes` |
+| Auto-deploy | `lctl sites auto-deploy enable [site-id]`, `lctl sites auto-deploy disable [site-id]` |
 | List/show site | `lctl sites list --server <id>`, `sites show <id> --server <id>` |
 | Server/site logs | `lctl logs --server <id> [--site <id>] [--type <name>]` |
 | Pull/push environment | `lctl env pull`, `lctl env push --file <path>` |
@@ -54,10 +61,11 @@ After a binary update, update the separately managed skill with
 | Outcome | Command |
 | --- | --- |
 | Deploy | `lctl deploy trigger <site-id> --server <id>` |
-| CI deploy | add `--ci --wait --timeout <seconds>` |
+| Bounded deploy | add `--wait --timeout <seconds> --json` (works without `--ci`) |
 | History/detail | `deploy list <site-id>`, `deploy show <deployment-id>` |
 | Output | `deploy logs <site-id> [deployment-id] [--follow]` |
-| Rollback | `deploy rollback <deployment-id> --server <id> --site <id>` |
+| Rollback | `lctl deploy rollback <deployment-id> --server <id> --site <id> --yes --wait --json` |
+| Cancel queued deployments | `lctl deploy cancel-queued [site-id] --server <id> --yes --json` |
 | List task records | `lctl tasks list --server <id>` |
 | Live task | `lctl tasks watch <task-id> --server <id>` |
 | Event console | `lctl events [--filter 'task.*'] [--channel resource.id]` |
@@ -83,9 +91,11 @@ Use the typed Docker commands for core project and application workflows. Pass
 | Delete, removing volumes | add `--remove-volumes` after explicit authorization |
 | Live progress | `lctl events --filter 'docker.application.*' --filter 'deployment.gha_steps'` |
 
-Docker projects may also contain Compose stacks and container databases. List
-them with confirmed raw `GET …/composes` and `GET …/databases` calls until they
-gain typed commands; verify exact routes and payloads before mutations.
+Compose stacks have dedicated `lctl docker composes` commands (`compose` alias):
+list, show, create, update, deploy, reload, deployments and delete. Read
+[resource-management.md](resource-management.md) for their flags and differences
+from single-container applications. Container databases and advanced workload
+configuration still require confirmed raw API routes.
 
 ## Server operations
 
@@ -102,7 +112,7 @@ gain typed commands; verify exact routes and payloads before mutations.
 Server-scoped operations accept `--server <id>` or project context. Interactive
 create/add flows collect required fields and destructive operations confirm.
 
-## Complete API coverage
+## Remaining JSON API workflows
 
 Use the raw client only for a confirmed backend path without a typed command:
 
@@ -117,3 +127,16 @@ lctl api POST /api/scripts --data @request.json
 The path must start with `/api`. Request data must be valid JSON. Safe GET,
 HEAD, and OPTIONS calls retry transient 429/502/503/504 responses; mutation
 methods are never replayed automatically.
+
+
+Dedicated commands do not cover the entire backend. Queue-worker CRUD, TLS
+management, providers, backups/storage, scripts, DNS, notifications, billing,
+platform updates and advanced Docker subresources still need confirmed API
+paths or the dashboard. Browser authentication, uploads and integration webhooks
+are not interchangeable with an authenticated JSON API request.
+
+Older operations are not uniformly scriptable: database/firewall/cron/daemon
+forms may prompt even with `--ci`; `run` execution and environment operations
+produce plain output. Some action clients ignore non-2xx responses. Verify their
+result through read-only state, or use the raw API to preserve HTTP errors.
+Avoid `config show --json`, which includes credentials, and raw environment output.

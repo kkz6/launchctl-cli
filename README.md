@@ -4,7 +4,7 @@
 applications, deployments, and day-to-day infrastructure operations. It
 combines scriptable Cobra commands, Bubble Tea views that work cleanly in tmux,
 resilient WebSocket progress, and an authenticated raw API escape hatch for
-every backend feature.
+authenticated JSON API workflows without dedicated commands.
 
 launchctl is currently a hosted service. The CLI does not install or operate a
 self-managed launchctl control plane.
@@ -26,7 +26,7 @@ brew install kkz6/tap/lctl
 
 Release archives include macOS and Linux builds for AMD64 and ARM64. Repository
 contributors can build the current checkout with `go build -o lctl .`; the
-private source repository is not a public `go install` distribution channel.
+source checkout is also suitable for local development builds.
 
 ### Install the AI skill
 
@@ -47,7 +47,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.3.0
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.4.0
 codex plugin add launchctl@launchctl
 ```
 
@@ -57,7 +57,7 @@ Restart Codex if the skill does not appear immediately, then invoke it with
 ## Quick start
 
 ```bash
-lctl login
+lctl auth
 lctl whoami
 lctl servers list
 lctl init
@@ -69,6 +69,11 @@ lctl docker applications list \
   --server <docker-server-id> \
   --project <project-id>
 ```
+
+`lctl auth` opens browser sign-in and displays an eight-digit one-time code.
+Enter it in the browser and approve; no manual API-token creation or pasting is
+needed. Use `--no-browser` on a headless machine. This requires the matching API
+and web device-approval release.
 
 Run `lctl` without a subcommand for the interactive navigator, or use
 `lctl status` for the live team dashboard.
@@ -99,10 +104,10 @@ run `lctl ai update` after updating `lctl` to install the newly bundled files.
 | Area | Commands |
 | --- | --- |
 | Account | `login`, `logout`, `whoami`, `auth`, `teams`, `config`, `switch` |
-| Servers | `servers list/show/reboot/ssh/metrics/watch` |
-| Sites | `sites list/show`, `env pull/push`, `logs`, `run` |
-| Deployments | `deploy trigger/list/show/logs/rollback` |
-| Docker | `docker projects list/show/create/update/delete`, `docker applications list/show/create/update/deploy/reload/start/stop/deployments/delete` |
+| Servers | `servers list/show/create-options/create/update/retry-provision/try-connection/archive/unarchive/reboot/ssh/metrics/watch` |
+| Sites | `sites list/show/create/update/delete/auto-deploy`, `env pull/push`, `logs`, `run` |
+| Deployments | `deploy trigger/list/show/logs/rollback/cancel-queued` |
+| Docker | `docker projects list/show/create/update/delete`, `docker applications list/show/create/update/deploy/reload/start/stop/deployments/delete`, `docker composes list/show/create/update/deploy/reload/deployments/delete` |
 | Operations | `services`, `databases`, `ssh-keys`, `firewall`, `cron`, `ssl`, `daemons` |
 | Live work | `status`, `events`, `tasks list/watch` |
 | CLI lifecycle | `version`, `update`, `update --check` |
@@ -126,10 +131,10 @@ views expose connection state, pause/clear/scroll controls, and clean alternate
 screen handling. The dashboard reacts to events immediately and retains a
 30-second REST reconciliation interval.
 
-## Complete API access
+## Raw API access
 
-High-level commands cover common human workflows. New backend modules are
-available immediately through the authenticated client:
+High-level commands cover common workflows. For confirmed JSON endpoints without
+a dedicated command, use the authenticated client:
 
 ```bash
 lctl api GET /api/servers/<server-id>/backups
@@ -169,6 +174,17 @@ go test -race ./...
 go vet ./...
 go build ./...
 ```
+
+With the docs repository checked out alongside this one, validate its CLI
+examples and generated command index too:
+
+```bash
+LCTL_DOCS_DIR="$(pwd)/../launchctl-docs" go test ./cmd -run 'TestCommandReference|TestDocumentedCommandExamples'
+```
+
+After adding or changing commands, regenerate both indexes with
+`UPDATE_CLI_DOCS=1 LCTL_DOCS_DIR="$(pwd)/../launchctl-docs" go test ./cmd -run TestCommandReference`.
+Tests also check command examples in the bundled operating skill.
 
 Preview the real startup header without loading local credentials or API
 clients:

@@ -143,7 +143,7 @@ overwritten or removed.
 Install the plugin from the GitHub repository at the matching CLI release tag:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.3.0
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.4.0
 codex plugin add launchctl@launchctl
 ```
 
@@ -157,13 +157,15 @@ it when the request concerns launchctl infrastructure.
 
 ### `lctl login`
 
-Authenticate using a personal access token generated from the web dashboard. Supports two-factor authentication.
+Sign in through the browser with a one-time code; no manually created API token is needed.
 
 ```bash
 lctl login
 ```
 
-You'll be prompted for your API token and, if enabled, a 2FA code.
+The CLI opens the approval page and displays an eight-digit code. Sign in there, enter the code, and approve. Accounts using two-factor authentication provide their second factor in the browser. Use `lctl auth --no-browser` to open the printed URL yourself. `lctl auth`, `lctl auth login`, and `lctl login` share this flow.
+
+Codes expire after ten minutes and can be redeemed only once. A failed attempt preserves the previous local sign-in. The API and web deployment must include device approval support. `--ci` intentionally rejects browser sign-in; pipelines can continue using their secret-provided credentials.
 
 ### `lctl logout`
 
@@ -516,19 +518,25 @@ lctl sites show <site-id> --server <server-id>
 
 ## Deployments
 
-### `lctl deploy trigger <site-id>`
+### `lctl deploy trigger [site-id]`
 
-Trigger a deployment and stream live logs.
+Trigger a deployment. In an interactive terminal, show live progress; in scripts,
+print the deployment receipt. The site and server default to `.launchctl.yml`.
 
 ```bash
 lctl deploy trigger <site-id> --server <server-id>
+lctl deploy trigger --wait --json
 ```
 
 | Flag | Description |
 |------|-------------|
 | `--server` | Server ID (optional if `lctl init` is configured) |
-| `--wait` | Wait for deployment to complete (for CI/CD) |
+| `--wait` | Wait for deployment to complete in any output mode |
 | `--timeout` | Timeout in seconds when using `--wait` (default: 300) |
+
+With `--json`, output is one deployment object. With `--wait`, it contains the
+last observed status; failed deployments, server timeouts, and local wait timeouts
+exit unsuccessfully. Ending a local wait does not stop the remote deployment.
 
 ### `lctl deploy list <site-id>`
 
@@ -548,11 +556,28 @@ lctl deploy show <deployment-id> --server <server-id> --site <site-id>
 
 ### `lctl deploy rollback <deployment-id>`
 
-Rollback to a previous deployment.
+Roll back to a previous deployment. Interactive use asks for confirmation;
+scripts, `--json`, and `--ci` require `--yes`. Server and site can come from
+`.launchctl.yml`.
 
 ```bash
 lctl deploy rollback <deployment-id> --server <server-id> --site <site-id>
+lctl deploy rollback <deployment-id> --yes --wait --timeout 600 --json
 ```
+
+`--wait` and `--timeout` have the same behavior as `deploy trigger`. Waiting
+tracks the newly created rollback deployment, rather than the historical target.
+
+### `lctl deploy cancel-queued [site-id]`
+
+Cancel all queued deployments for a site. Running deployments continue. The
+site and server default to `.launchctl.yml`; noninteractive use requires `--yes`.
+
+```bash
+lctl deploy cancel-queued <site-id> --server <server-id> --yes --json
+```
+
+JSON output reports the cancellation count, for example `{"cancelled":2}`.
 
 ### `lctl deploy logs <site-id> [deployment-id]`
 
@@ -572,6 +597,14 @@ lctl deploy logs <site-id> --server <server-id> --follow
 | Flag | Description |
 |------|-------------|
 | `-f, --follow` | Stream logs in real-time for active deployments |
+
+Stored logs are fetched by the deployment's task ID, including tasks older than
+the server's recent-task list. `--follow` tracks pending, queued, and installing
+deployments. In an interactive terminal it uses the live view; in scripts it
+prints plain log output, and with `--json` it emits newline-delimited JSON
+snapshots. Without `--follow`, `--json` emits one snapshot. Each snapshot includes
+a `deployment` object and, when available, a `task` object with its output.
+Following exits unsuccessfully when the deployment fails or times out.
 
 ---
 
@@ -933,4 +966,68 @@ lctl completion zsh > "${fpath[1]}/_lctl"
 
 # Fish
 lctl completion fish > ~/.config/fish/completions/lctl.fish
+```
+
+
+## Server and site lifecycle
+
+```bash
+lctl servers create-options
+lctl servers create --name staging --provider custom_server --type php --ip 192.0.2.10 --yes --json
+lctl servers update <server-id> --description='' --monitoring=false --json
+lctl servers retry-provision <server-id> --yes
+lctl servers try-connection <server-id> --yes
+lctl servers archive <server-id> --yes
+lctl servers unarchive <server-id>
+lctl sites create --server <server-id> --address example.com --type laravel --php-version php84 --json
+lctl sites update <site-id> --server <server-id> --branch main --queue-deployments=false --json
+lctl sites auto-deploy enable <site-id> --server <server-id>
+lctl sites auto-deploy disable <site-id> --server <server-id>
+lctl sites delete <site-id> --server <server-id> --yes --json
+```
+
+Cloud server creation also requires a saved `--credential-id`, `--region`, and
+`--size`. Custom server creation registers the machine; complete dashboard setup
+before `try-connection`. Provisioning/reboot receipts are queued, not completion.
+Archive changes the record without stopping the VM. Updating `--ssh-port` only
+changes the recorded connection port. Site deletion is asynchronous.
+
+Only supplied update flags are sent. Explicit empty strings and false booleans
+are preserved. Site updates support PHP version, web folder, branch, release
+retention and deployment queuing. Creation can attach an existing source-control
+connection and numeric repository ID using `--source-control`, `--repository-id`
+and `--branch`. Hooks and advanced provisioning options remain API workflows.
+
+## Docker Compose
+
+```bash
+lctl docker composes list --server <server-id> --project <project-id> --json
+lctl docker composes create --server <server-id> --project <project-id> --name web --file compose.yml --json
+lctl docker composes show <compose-id> --server <server-id> --project <project-id> --json
+lctl docker composes update <compose-id> --server <server-id> --project <project-id> --env-file .env.production
+lctl docker composes deploy <compose-id> --server <server-id> --project <project-id> --wait --timeout 600 --json
+lctl docker composes reload <compose-id> --server <server-id> --project <project-id> --yes --json
+lctl docker composes deployments <compose-id> --server <server-id> --project <project-id> --json
+lctl docker composes delete <compose-id> --server <server-id> --project <project-id> --yes --json
+```
+
+Creation registers local YAML (up to 128 KiB), without deploying it. Updates
+support name, environment-file contents and run-command override; the backend
+cannot patch source/YAML through this update endpoint. An empty environment file
+clears variables, and `--run-command=''` resets the override. Reload applies
+saved environment changes; run-command overrides require deploy.
+
+Default output redacts configuration. `show --json --show-config` deliberately
+reveals YAML/environment/command contents and can expose secrets. Delete preserves
+named volumes unless `--remove-volumes` is explicitly requested. Deploy waiting
+checks the returned deployment, not container health. Reload/deletion only return
+queued receipts. Git-source creation, registry attachment and container databases
+remain API/dashboard workflows.
+
+See [the generated command index](command-index.md) for every registered command.
+Regenerate and validate it together with the separate documentation repository:
+
+```bash
+UPDATE_CLI_DOCS=1 LCTL_DOCS_DIR=/path/to/launchctl-docs go test ./cmd -run TestCommandReference
+LCTL_DOCS_DIR=/path/to/launchctl-docs go test ./cmd -run 'TestCommandReference|TestDocumentedCommandExamples'
 ```

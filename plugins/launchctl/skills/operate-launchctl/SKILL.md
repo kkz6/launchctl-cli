@@ -15,7 +15,13 @@ and use `lctl api` only for backend resources without a dedicated command.
 2. If the binary is unavailable inside the `launchctl-cli` source checkout,
    use `go run .` from that repository as the command prefix. Do not install
    software unless the user asks.
-3. Run `lctl whoami --json` before account-specific work. Never print, inspect,
+3. Run `lctl whoami --json` before account-specific work. If sign-in is needed,
+   run `lctl auth` (or `lctl auth --no-browser` on a headless machine). The user
+   enters the displayed eight-digit code in their browser and explicitly approves.
+   Do not approve your own device request, retrieve browser credentials, or ask
+   the user to paste an API token. `lctl login` and `lctl auth login` are aliases
+   for the same browser flow. Browser approval may also require the account
+   second factor. A failed/expired attempt preserves existing local sign-in. Never print, inspect,
    or persist the token itself.
 4. Inspect `lctl config show` and `.launchctl.yml` when server, site, Docker
    project, or application context matters. Pass `--profile` when the user
@@ -24,6 +30,10 @@ and use `lctl api` only for backend resources without a dedicated command.
 
 Read [references/commands.md](references/commands.md) when choosing a command or
 when the request spans more than one resource family.
+
+Read [references/resource-management.md](references/resource-management.md)
+for server/site lifecycle and Compose stacks, including queued-action semantics
+and explicit confirmation flags.
 
 Read [references/docker-applications.md](references/docker-applications.md)
 before creating, configuring, deploying, troubleshooting, or deleting a Docker
@@ -56,7 +66,10 @@ PHP/static site deployment commands.
    of repeatedly polling by hand:
    - `lctl servers watch <server-id>` for provisioning.
    - `lctl tasks watch <task-id> --server <server-id>` for jobs and scripts.
-   - `lctl deploy trigger <site-id> --server <id>` for an interactive deploy.
+   - `lctl deploy trigger <site-id> --server <id> --wait --timeout 600 --json`
+     for bounded native deployment waiting.
+   - `lctl docker composes deploy <compose-id> --wait --timeout 600 --json`
+     with resolved server/project context for Compose deployment results.
    - `lctl events --filter '<resource>.*'` for team-wide lifecycle events.
    - `lctl events --filter 'docker.application.*' --filter
      'deployment.gha_steps'` for Docker applications.
@@ -70,7 +83,9 @@ PHP/static site deployment commands.
 1. Resolve the server and site.
 2. Run `lctl deploy list <site-id> --server <server-id> --json`.
 3. Inspect the failed record with `deploy show`.
-4. Read stored output with `deploy logs`; use `--follow` only while active.
+4. Read stored output with `deploy logs --json`; use `--follow --json` for
+   changing snapshots. Task output is fetched by its exact ID. Following an
+   already failed or timed-out deployment also returns a nonzero exit status.
 5. If a task ID is present, use `tasks watch` or `tasks list` for its output and
    exit code.
 6. Report the failing step and evidence. Do not roll back or redeploy unless the
@@ -83,10 +98,11 @@ Use environment-provided credentials and a bounded wait:
 ```bash
 lctl deploy trigger "$SITE_ID" \
   --server "$SERVER_ID" \
-  --ci --wait --timeout 600
+  --ci --wait --timeout 600 --json
 ```
 
-Require `LAUNCHCTL_TOKEN` and `LAUNCHCTL_TEAM_ID`. launchctl is hosted-only.
+Use the configured sign-in or secret-provided `LAUNCHCTL_TOKEN` and
+`LAUNCHCTL_TEAM_ID` for unattended work; browser login cannot run with `--ci`. launchctl is hosted-only.
 Use `LAUNCHCTL_API_URL` only for an explicitly provided, approved launchctl development or staging origin.
 Never echo these values and never invent self-hosting instructions.
 
@@ -127,8 +143,8 @@ JSON objects.
 
 - Preserve the active profile unless the user asks to switch it permanently;
   prefer the one-command `--profile` flag.
-- Do not write remote `.env` values without reviewing the redacted diff and
-  explicit authorization.
+- Do not write remote `.env` values without reviewing the changes privately and
+  explicit authorization; the current CLI diff includes plaintext values.
 - Distinguish detaching an SSH key from deleting the team key.
 - Distinguish stopping/restarting a service from rebooting its server.
 - Never expose token, password, private key, environment secret, or raw secret
@@ -136,10 +152,18 @@ JSON objects.
 - Keep Docker build secrets write-only. Do not attempt to retrieve their values,
   and never put registry passwords or secrets directly in a shell command when
   a JSON request file or saved credential can be used.
-- Preserve Docker named volumes on application deletion unless the user
+- Preserve Docker named volumes on application or Compose deletion unless the user
   explicitly authorizes the `--remove-volumes` flag after reviewing the target.
 - Distinguish Docker **Deploy/Rebuild** from **Reload**: deploy rebuilds or pulls
   the source and recreates the container; reload reuses the on-server image but
   recreates the container with its current environment and configuration.
+- Do not assume global flags make every older command scriptable. Legacy database,
+  firewall, cron and daemon creation/deletion still prompt; `status` and metrics
+  watch are interactive. `run --json` only structures history. Some older action
+  clients do not check HTTP failure statuses, so verify state before reporting
+  success. Use a confirmed raw API call when reliable automation is required.
+- Avoid `config show --json`: it includes stored credentials. `env pull` and the
+  current `env push` diff can expose environment secrets; do not include their
+  raw output in a response or shared log.
 - If WebSocket progress is interrupted, rely on the client's reconnect first,
   then reconcile through REST before declaring the operation failed.

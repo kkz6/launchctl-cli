@@ -48,7 +48,7 @@ brews:
     commit_msg_template: "update lctl to {{ .Tag }}"
     commit_author:
       name: kkz6
-      email: kkz6@users.noreply.github.com
+      email: karthickk1996@hotmail.com
 
 changelog:
   sort: asc

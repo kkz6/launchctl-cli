@@ -293,7 +293,7 @@ do not delete that file without separate authorization.
 
 ## Compose stacks and container databases
 
-Docker projects can also contain Compose stacks and container databases. They
-do not yet have typed `lctl docker` commands. Use only confirmed nested raw API
-routes after read-only discovery; do not substitute application commands for a
-different workload kind.
+Docker projects can also contain Compose stacks and container databases. Use
+`lctl docker composes` for stacks and read [resource-management.md](resource-management.md)
+for its supported workflows. Container databases still require confirmed nested
+raw API routes. Do not substitute application commands for another workload kind.
