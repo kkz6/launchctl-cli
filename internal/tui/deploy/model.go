@@ -1,6 +1,8 @@
 package deploy
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,8 +29,9 @@ type wsErrorMsg struct {
 	err error
 }
 
-type taskIDFoundMsg struct {
-	taskID string
+type deploymentPolledMsg struct {
+	deployment *api.DeploymentResponse
+	err        error
 }
 
 type logsWSConnectedMsg struct {
@@ -71,6 +74,7 @@ var (
 )
 
 type Opts struct {
+	Context      context.Context
 	SiteName     string
 	ServerID     string
 	SiteID       string
@@ -83,26 +87,29 @@ type Opts struct {
 }
 
 type Model struct {
-	viewport     viewport.Model
-	spinner      spinner.Model
-	logs         []string
-	status       string
-	step         string
-	done         bool
-	err          error
-	siteName     string
-	width        int
-	height       int
-	ws           *api.WSClient
-	logsWS       *api.LogsWSClient
-	client       *api.Client
-	jwt          string
-	teamID       string
-	apiURL       string
-	serverID     string
-	siteID       string
-	deploymentID string
-	taskID       string
+	viewport         viewport.Model
+	spinner          spinner.Model
+	logs             []string
+	status           string
+	step             string
+	done             bool
+	err              error
+	siteName         string
+	width            int
+	height           int
+	ws               *api.WSClient
+	logsWS           *api.LogsWSClient
+	client           *api.Client
+	jwt              string
+	teamID           string
+	apiURL           string
+	serverID         string
+	siteID           string
+	deploymentID     string
+	taskID           string
+	ctx              context.Context
+	cancel           context.CancelFunc
+	connectionNotice string
 }
 
 func NewModel(opts Opts) Model {
@@ -111,6 +118,11 @@ func NewModel(opts Opts) Model {
 	s.Style = lipgloss.NewStyle().Foreground(tui.Indigo)
 
 	vp := viewport.New(80, 20)
+	ctx := opts.Context
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctx)
 
 	return Model{
 		viewport:     vp,
@@ -125,6 +137,8 @@ func NewModel(opts Opts) Model {
 		serverID:     opts.ServerID,
 		siteID:       opts.SiteID,
 		deploymentID: opts.DeploymentID,
+		ctx:          ctx,
+		cancel:       cancel,
 	}
 }
 
@@ -132,7 +146,7 @@ func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
 		listenEventWS(m.ws, m.deploymentID),
-		pollForTaskID(m.client, m.serverID, m.siteID, m.deploymentID),
+		pollDeployment(m.ctx, m.client, m.serverID, m.siteID, m.deploymentID),
 	)
 }
 
@@ -147,6 +161,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				notify.Info(fmt.Sprintf("Deployment of %s running in background", m.siteName))
 				startBackgroundWatcher(m.client, m.jwt, m.serverID, m.siteID, m.deploymentID, m.siteName)
 			}
+			m.Close()
 			return m, tea.Quit
 		case "l":
 			return m, nil
@@ -163,11 +178,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.viewport.SetContent(m.renderLogs())
 
-	case taskIDFoundMsg:
-		m.taskID = msg.taskID
-		cmds = append(cmds, connectLogsWS(m.jwt, m.teamID, m.serverID, msg.taskID, m.apiURL))
+	case deploymentPolledMsg:
+		if m.done || m.ctx.Err() != nil {
+			return m, nil
+		}
+		if msg.err != nil {
+			m.connectionNotice = "Unable to refresh deployment status; retrying"
+			var apiErr *api.APIError
+			if errors.As(msg.err, &apiErr) && (apiErr.StatusCode == 401 || apiErr.StatusCode == 403 || apiErr.StatusCode == 404) {
+				m.err = fmt.Errorf("cannot monitor deployment %s: %w", m.deploymentID, msg.err)
+				m.done = true
+				return m, nil
+			}
+		} else if msg.deployment != nil {
+			m.connectionNotice = ""
+			m.status = msg.deployment.Status
+			if m.taskID == "" && msg.deployment.TaskID != nil && *msg.deployment.TaskID != "" {
+				m.taskID = *msg.deployment.TaskID
+				cmds = append(cmds, connectLogsWS(m.jwt, m.teamID, m.serverID, m.taskID, m.apiURL))
+			}
+			if terminalDeploymentStatus(m.status) {
+				m.complete(m.status)
+				return m, tea.Batch(cmds...)
+			}
+		}
+		cmds = append(cmds, tea.Tick(2*time.Second, func(time.Time) tea.Msg { return pollTickMsg{} }))
 
 	case logsWSConnectedMsg:
+		if m.ctx.Err() != nil {
+			_ = msg.ws.Close()
+			return m, nil
+		}
 		m.logsWS = msg.ws
 		cmds = append(cmds, listenLogsWS(msg.ws))
 
@@ -183,31 +224,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Logs stream ended, task output complete
 
 	case statusMsg:
+		if m.done {
+			return m, nil
+		}
 		m.status = msg.status
 		m.step = msg.step
+		if terminalDeploymentStatus(msg.status) {
+			m.complete(msg.status)
+			return m, nil
+		}
 		if !m.done {
 			cmds = append(cmds, listenEventWS(m.ws, m.deploymentID))
 		}
 
 	case doneMsg:
-		m.done = true
-		m.status = msg.status
-		if msg.status == "finished" {
-			notify.Success(fmt.Sprintf("Deployment of %s finished", m.siteName))
-		} else {
-			notify.Error(fmt.Sprintf("Deployment of %s %s", m.siteName, msg.status))
-		}
+		m.complete(msg.status)
 
 	case wsErrorMsg:
 		if !m.done {
-			m.err = msg.err
-			m.done = true
-			notify.Error(fmt.Sprintf("Deployment error: %s", msg.err))
+			m.connectionNotice = "Live events disconnected; checking deployment status"
 		}
 
 	case pollTickMsg:
-		if m.taskID == "" && !m.done {
-			cmds = append(cmds, pollForTaskID(m.client, m.serverID, m.siteID, m.deploymentID))
+		if !m.done && m.ctx.Err() == nil {
+			cmds = append(cmds, pollDeployment(m.ctx, m.client, m.serverID, m.siteID, m.deploymentID))
 		}
 
 	case spinner.TickMsg:
@@ -223,6 +263,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m Model) Err() error { return m.err }
+
+func (m Model) Done() bool { return m.done }
+
+// Close stops pending status requests and closes this view's log stream.
+func (m Model) Close() {
+	m.cancel()
+	if m.logsWS != nil {
+		_ = m.logsWS.Close()
+	}
+}
+
+func (m *Model) complete(status string) {
+	if m.done {
+		return
+	}
+	m.done = true
+	m.status = status
+	if status == "finished" {
+		notify.Success(fmt.Sprintf("Deployment of %s finished", m.siteName))
+	} else {
+		m.err = fmt.Errorf("deployment %s %s", m.deploymentID, status)
+		notify.Error(fmt.Sprintf("Deployment of %s %s", m.siteName, status))
+	}
+}
+
+func terminalDeploymentStatus(status string) bool {
+	return status == "finished" || status == "failed" || status == "timeout" || status == "cancelled"
 }
 
 func (m Model) renderLogs() string {
@@ -263,6 +333,11 @@ func (m Model) View() string {
 		}
 	}
 	b.WriteString(statusBarStyle.Render(statusLine) + "\n")
+	if m.err != nil {
+		b.WriteString(tui.Warning.Render(m.err.Error()) + "\n")
+	} else if m.connectionNotice != "" {
+		b.WriteString(tui.Dim.Render(m.connectionNotice) + "\n")
+	}
 
 	logHeader := logHeaderStyle.Render(fmt.Sprintf("Output  %s",
 		logCountStyle.Render(fmt.Sprintf("(%d lines)", len(m.logs)))))
@@ -282,61 +357,55 @@ func (m Model) View() string {
 }
 
 func listenEventWS(ws *api.WSClient, deploymentID string) tea.Cmd {
+	if ws == nil {
+		return nil
+	}
 	return func() tea.Msg {
-		msg, err := ws.ReadMessage()
-		if err != nil {
-			return wsErrorMsg{err: err}
-		}
-
-		switch msg.Event {
-		case "deployment.progress":
-			var event api.DeploymentLogEvent
-			if err := parseEventData(msg.Data, &event); err == nil {
-				if event.DeploymentID != deploymentID {
-					return listenEventWS(ws, deploymentID)()
-				}
-				return statusMsg{status: event.Status, step: event.Step}
+		for {
+			msg, err := ws.ReadMessage()
+			if err != nil {
+				return wsErrorMsg{err: err}
 			}
 
-		case "deployment.finished", "deployment.failed", "deployment.timeout", "deployment.cancelled", "deployment.started":
-			var event api.DeploymentLogEvent
-			if err := parseEventData(msg.Data, &event); err == nil {
-				if event.DeploymentID != deploymentID {
-					return listenEventWS(ws, deploymentID)()
+			switch msg.Event {
+			case "deployment.progress":
+				var event api.DeploymentLogEvent
+				if err := parseEventData(msg.Data, &event); err == nil {
+					if event.DeploymentID != deploymentID {
+						continue
+					}
+					return statusMsg{status: event.Status, step: event.Step}
 				}
-				switch msg.Event {
-				case "deployment.started":
-					return statusMsg{status: "deploying", step: event.Step}
-				case "deployment.finished":
-					return doneMsg{status: "finished"}
-				case "deployment.failed":
-					return doneMsg{status: "failed"}
-				case "deployment.timeout":
-					return doneMsg{status: "timeout"}
-				default:
-					return doneMsg{status: "cancelled"}
+
+			case "deployment.finished", "deployment.failed", "deployment.timeout", "deployment.cancelled", "deployment.started", "deployment.rollback.completed", "deployment.rollback.failed", "deployment.rollback.started":
+				var event api.DeploymentLogEvent
+				if err := parseEventData(msg.Data, &event); err == nil {
+					if event.DeploymentID != deploymentID {
+						continue
+					}
+					switch msg.Event {
+					case "deployment.started", "deployment.rollback.started":
+						return statusMsg{status: "installing", step: event.Step}
+					case "deployment.finished", "deployment.rollback.completed":
+						return doneMsg{status: "finished"}
+					case "deployment.failed", "deployment.rollback.failed":
+						return doneMsg{status: "failed"}
+					case "deployment.timeout":
+						return doneMsg{status: "timeout"}
+					default:
+						return doneMsg{status: "cancelled"}
+					}
 				}
 			}
-		}
 
-		return listenEventWS(ws, deploymentID)()
+		}
 	}
 }
 
-func pollForTaskID(client *api.Client, serverID, siteID, deploymentID string) tea.Cmd {
+func pollDeployment(ctx context.Context, client *api.Client, serverID, siteID, deploymentID string) tea.Cmd {
 	return func() tea.Msg {
-		time.Sleep(2 * time.Second)
-
-		dep, err := client.GetDeployment(serverID, siteID, deploymentID)
-		if err != nil {
-			return pollTickMsg{}
-		}
-
-		if dep.TaskID != nil && *dep.TaskID != "" {
-			return taskIDFoundMsg{taskID: *dep.TaskID}
-		}
-
-		return pollTickMsg{}
+		dep, err := client.GetDeploymentContext(ctx, serverID, siteID, deploymentID)
+		return deploymentPolledMsg{deployment: dep, err: err}
 	}
 }
 

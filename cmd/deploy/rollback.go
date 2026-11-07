@@ -2,8 +2,8 @@ package deploy
 
 import (
 	"fmt"
+	"time"
 
-	"github.com/charmbracelet/huh"
 	"github.com/kkz6/launchctl/internal/api"
 	"github.com/kkz6/launchctl/internal/appstate"
 	"github.com/kkz6/launchctl/internal/resolve"
@@ -11,49 +11,55 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rollbackServerFlag, rollbackSiteFlag string
+func newRollbackCommand() *cobra.Command {
+	var server, site string
+	var yes, wait bool
+	var timeout int
+	cmd := &cobra.Command{
+		Use:          "rollback <deployment-id>",
+		Short:        "Roll back to a previous deployment",
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateWaitOptions(wait, timeout); err != nil {
+				return err
+			}
+			serverID, err := resolve.ServerID(server)
+			if err != nil {
+				return err
+			}
+			siteID, err := resolve.SiteID(site)
+			if err != nil {
+				return err
+			}
+			confirmed, err := confirmDestructive(cmd, yes, "Roll back to this deployment?", "This will deploy the selected previous version of the site.")
+			if err != nil {
+				return err
+			}
+			if !confirmed {
+				fmt.Fprintln(cmd.OutOrStdout(), tui.Dim.Render("Cancelled"))
+				return nil
+			}
 
-var rollbackCmd = &cobra.Command{
-	Use:   "rollback <deployment-id>",
-	Short: "Rollback to a previous deployment",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		serverID, err := resolve.ServerID(rollbackServerFlag)
-		if err != nil {
-			return err
-		}
-
-		siteID, err := resolve.SiteID(rollbackSiteFlag)
-		if err != nil {
-			return err
-		}
-
-		var confirm bool
-		huh.NewConfirm().
-			Title("Rollback to this deployment?").
-			Description("This will deploy the previous version of the site.").
-			Value(&confirm).
-			Run()
-
-		if !confirm {
-			fmt.Println(tui.Dim.Render("Cancelled"))
+			client := api.NewClient(appstate.GetConfig())
+			deployment, err := client.RollbackDeploymentContext(cmd.Context(), serverID, siteID, args[0])
+			if err != nil {
+				return fmt.Errorf("failed to roll back: %w", err)
+			}
+			if wait {
+				return reportDeploymentWait(cmd, client, serverID, siteID, deployment.ID, time.Duration(timeout)*time.Second)
+			}
+			if jsonEnabled(cmd) {
+				return writeJSON(cmd, deployment)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), tui.Success.Render(fmt.Sprintf("Rollback triggered: %s", deployment.ID)))
 			return nil
-		}
-
-		cfg := appstate.GetConfig()
-		client := api.NewClient(cfg)
-
-		d, err := client.RollbackDeployment(serverID, siteID, args[0])
-		if err != nil {
-			return fmt.Errorf("failed to rollback: %w", err)
-		}
-
-		fmt.Println(tui.Success.Render(fmt.Sprintf("Rollback triggered: %s", d.ID)))
-		return nil
-	},
-}
-
-func init() {
-	rollbackCmd.Flags().StringVar(&rollbackServerFlag, "server", "", "Server ID (required)")
-	rollbackCmd.Flags().StringVar(&rollbackSiteFlag, "site", "", "Site ID (required)")
+		},
+	}
+	cmd.Flags().StringVar(&server, "server", "", "Server ID (or project default)")
+	cmd.Flags().StringVar(&site, "site", "", "Site ID (or project default)")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Confirm the rollback without prompting")
+	cmd.Flags().BoolVar(&wait, "wait", false, "Wait for rollback to complete")
+	cmd.Flags().IntVar(&timeout, "timeout", 300, "Timeout in seconds when using --wait")
+	return cmd
 }

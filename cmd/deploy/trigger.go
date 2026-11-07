@@ -13,117 +13,88 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	triggerServerFlag  string
-	triggerWaitFlag    bool
-	triggerTimeoutFlag int
-)
+func newTriggerCommand() *cobra.Command {
+	var server string
+	var wait bool
+	var timeout int
+	cmd := &cobra.Command{
+		Use:          "trigger [site-id]",
+		Short:        "Trigger a deployment",
+		Args:         cobra.MaximumNArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := validateWaitOptions(wait, timeout); err != nil {
+				return err
+			}
+			serverID, err := resolve.ServerID(server)
+			if err != nil {
+				return err
+			}
+			siteArg := ""
+			if len(args) > 0 {
+				siteArg = args[0]
+			}
+			siteID, err := resolve.SiteID(siteArg)
+			if err != nil {
+				return fmt.Errorf("site ID is required (or run `lctl init` to set a default)")
+			}
 
-var triggerCmd = &cobra.Command{
-	Use:   "trigger <site-id>",
-	Short: "Trigger a deployment",
-	Args:  cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		serverID, err := resolve.ServerID(triggerServerFlag)
-		if err != nil {
-			return err
-		}
+			cfg := appstate.GetConfig()
+			client := api.NewClient(cfg)
+			deployment, err := client.DeploySiteContext(cmd.Context(), serverID, siteID)
+			if err != nil {
+				return fmt.Errorf("failed to trigger deployment: %w", err)
+			}
+			if wait {
+				return reportDeploymentWait(cmd, client, serverID, siteID, deployment.ID, time.Duration(timeout)*time.Second)
+			}
+			if jsonEnabled(cmd) {
+				return writeJSON(cmd, deployment)
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), tui.Success.Render(fmt.Sprintf("Deployment %s triggered", deployment.ID)))
+			if !interactive(cmd) {
+				return nil
+			}
 
-		cfg := appstate.GetConfig()
-		cfg.ApplyEnvOverrides()
-		client := api.NewClient(cfg)
-		siteID := args[0]
-
-		ciMode, _ := cmd.Flags().GetBool("ci")
-
-		site, err := client.GetSite(serverID, siteID)
-		if err != nil {
-			return fmt.Errorf("failed to get site: %w", err)
-		}
-
-		deployment, err := client.DeploySite(serverID, siteID)
-		if err != nil {
-			return fmt.Errorf("failed to trigger deployment: %w", err)
-		}
-
-		fmt.Println(tui.Success.Render(fmt.Sprintf("Deployment %s triggered", deployment.ID)))
-
-		if ciMode && triggerWaitFlag {
-			return waitForDeployment(client, serverID, siteID, deployment.ID, time.Duration(triggerTimeoutFlag)*time.Second)
-		}
-
-		if ciMode {
+			siteName := siteID
+			if site, err := client.GetSite(serverID, siteID); err == nil {
+				siteName = site.Address
+			}
+			jwt, err := client.ExchangeToken()
+			if err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), tui.Warning.Render("Could not authenticate for live logs; deployment is running in the background"))
+				return nil
+			}
+			ws, err := api.NewWSClient(cfg, jwt)
+			if err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), tui.Warning.Render("Could not connect to live logs; deployment is running in the background"))
+				return nil
+			}
+			defer ws.Close()
+			if err := ws.Subscribe(fmt.Sprintf("team.%s", cfg.TeamID)); err != nil {
+				fmt.Fprintln(cmd.ErrOrStderr(), tui.Warning.Render("Could not subscribe to events; deployment is running in the background"))
+				return nil
+			}
+			model := deploytui.NewModel(deploytui.Opts{
+				Context:  cmd.Context(),
+				SiteName: siteName, ServerID: serverID, SiteID: siteID,
+				DeploymentID: deployment.ID, Client: client, JWT: jwt,
+				TeamID: cfg.TeamID, APIURL: client.BaseURL(), WS: ws,
+			})
+			defer model.Close()
+			final, err := tea.NewProgram(model, tea.WithAltScreen(), tea.WithContext(cmd.Context())).Run()
+			if err != nil {
+				return err
+			}
+			if result, ok := final.(deploytui.Model); ok {
+				result.Close()
+				return result.Err()
+			}
 			return nil
-		}
-
-		jwt, err := client.ExchangeToken()
-		if err != nil {
-			fmt.Println(tui.Warning.Render("Could not authenticate for live logs, deployment is running in the background"))
-			return nil
-		}
-
-		ws, err := api.NewWSClient(cfg, jwt)
-		if err != nil {
-			fmt.Println(tui.Warning.Render("Could not connect to live logs, deployment is running in the background"))
-			return nil
-		}
-		defer ws.Close()
-
-		channel := fmt.Sprintf("team.%s", cfg.TeamID)
-		if err := ws.Subscribe(channel); err != nil {
-			fmt.Println(tui.Warning.Render("Could not subscribe to events"))
-			return nil
-		}
-
-		model := deploytui.NewModel(deploytui.Opts{
-			SiteName:     site.Address,
-			ServerID:     serverID,
-			SiteID:       siteID,
-			DeploymentID: deployment.ID,
-			Client:       client,
-			JWT:          jwt,
-			TeamID:       cfg.TeamID,
-			APIURL:       client.BaseURL(),
-			WS:           ws,
-		})
-		p := tea.NewProgram(model, tea.WithAltScreen())
-		if _, err := p.Run(); err != nil {
-			return err
-		}
-
-		return nil
-	},
-}
-
-func waitForDeployment(client *api.Client, serverID, siteID, deploymentID string, timeout time.Duration) error {
-	deadline := time.Now().Add(timeout)
-	ticker := time.NewTicker(3 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		d, err := client.GetDeployment(serverID, siteID, deploymentID)
-		if err != nil {
-			return fmt.Errorf("failed to check deployment status: %w", err)
-		}
-
-		switch d.Status {
-		case "finished":
-			fmt.Println(tui.Success.Render("Deployment completed successfully"))
-			return nil
-		case "failed":
-			return fmt.Errorf("deployment failed")
-		}
-
-		if time.Now().After(deadline) {
-			return fmt.Errorf("deployment timed out after %s (status: %s)", timeout, d.Status)
-		}
-
-		<-ticker.C
+		},
 	}
-}
-
-func init() {
-	triggerCmd.Flags().StringVar(&triggerServerFlag, "server", "", "Server ID")
-	triggerCmd.Flags().BoolVar(&triggerWaitFlag, "wait", false, "Wait for deployment to complete (CI/CD mode)")
-	triggerCmd.Flags().IntVar(&triggerTimeoutFlag, "timeout", 300, "Timeout in seconds when using --wait")
+	cmd.Flags().StringVar(&server, "server", "", "Server ID (or project default)")
+	cmd.Flags().BoolVar(&wait, "wait", false, "Wait for deployment to complete")
+	cmd.Flags().IntVar(&timeout, "timeout", 300, "Timeout in seconds when using --wait")
+	return cmd
 }
