@@ -17,4 +17,10 @@ func init() {
 	ServersCmd.AddCommand(sshCmd)
 	ServersCmd.AddCommand(metricsCmd)
 	ServersCmd.AddCommand(watchCmd)
+	ServersCmd.AddCommand(newCreateOptionsCommand())
+	ServersCmd.AddCommand(newCreateCommand())
+	ServersCmd.AddCommand(newUpdateCommand())
+	for _, action := range lifecycleActions {
+		ServersCmd.AddCommand(newServerActionCommand(action))
+	}
 }

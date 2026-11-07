@@ -26,6 +26,7 @@ func newDockerCommand() *cobra.Command {
 	}
 	cmd.AddCommand(newProjectsCommand())
 	cmd.AddCommand(newApplicationsCommand())
+	cmd.AddCommand(newComposesCommand())
 	return cmd
 }
 

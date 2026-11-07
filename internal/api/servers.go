@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 )
@@ -20,7 +21,11 @@ func (c *Client) ListServers() ([]ServerResponse, *PaginationMeta, error) {
 }
 
 func (c *Client) GetServer(id string) (*ServerResponse, error) {
-	resp, err := c.doRequest(http.MethodGet, fmt.Sprintf("/api/servers/%s", id), nil)
+	return c.GetServerContext(context.Background(), id)
+}
+
+func (c *Client) GetServerContext(ctx context.Context, id string) (*ServerResponse, error) {
+	resp, err := c.doRequestContext(ctx, http.MethodGet, fmt.Sprintf("/api/servers/%s", id), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -34,7 +39,11 @@ func (c *Client) GetServer(id string) (*ServerResponse, error) {
 }
 
 func (c *Client) GetCreateServerOptions() (*CreateServerOptions, error) {
-	resp, err := c.doRequest(http.MethodGet, "/api/servers/create-options", nil)
+	return c.GetCreateServerOptionsContext(context.Background())
+}
+
+func (c *Client) GetCreateServerOptionsContext(ctx context.Context) (*CreateServerOptions, error) {
+	resp, err := c.doRequestContext(ctx, http.MethodGet, "/api/servers/create-options", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -48,7 +57,11 @@ func (c *Client) GetCreateServerOptions() (*CreateServerOptions, error) {
 }
 
 func (c *Client) CreateServer(req CreateServerRequest) (*ServerResponse, error) {
-	resp, err := c.doRequest(http.MethodPost, "/api/servers/", req)
+	return c.CreateServerContext(context.Background(), req)
+}
+
+func (c *Client) CreateServerContext(ctx context.Context, req CreateServerRequest) (*ServerResponse, error) {
+	resp, err := c.doRequestContext(ctx, http.MethodPost, "/api/servers/", req)
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +75,7 @@ func (c *Client) CreateServer(req CreateServerRequest) (*ServerResponse, error) 
 }
 
 func (c *Client) RebootServer(id string) error {
-	resp, err := c.doRequest(http.MethodPost, fmt.Sprintf("/api/servers/%s/reboot", id), nil)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	return nil
+	return c.RebootServerContext(context.Background(), id)
 }
 
 func (c *Client) GetTask(serverID, taskID string) (*TaskResponse, error) {

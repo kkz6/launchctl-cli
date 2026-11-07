@@ -134,6 +134,9 @@ type SiteResponse struct {
 	Path                        string              `json:"path"`
 	WebFolder                   string              `json:"web_folder"`
 	PHPVersion                  string              `json:"php_version"`
+	PendingPHPVersion           string              `json:"pending_php_version,omitempty"`
+	QueueDeployments            bool                `json:"queue_deployments"`
+	PendingCaddyfileUpdateSince *string             `json:"pending_caddyfile_update_since,omitempty"`
 	AutoDeployment              bool                `json:"auto_deployment"`
 	URL                         string              `json:"url"`
 	RepositoryURL               *string             `json:"repository_url,omitempty"`
@@ -233,29 +236,41 @@ type AuthResponse struct {
 }
 
 type CreateServerRequest struct {
-	Name            string `json:"name"`
-	Provider        string `json:"provider"`
-	CredentialID    string `json:"credential_id"`
-	Type            string `json:"type"`
-	Region          string `json:"region"`
-	Size            string `json:"size"`
-	OperatingSystem string `json:"operating_system"`
-	PHPVersion      string `json:"php_version,omitempty"`
+	Name            string   `json:"name"`
+	Description     *string  `json:"description,omitempty"`
+	Provider        string   `json:"provider"`
+	CredentialID    string   `json:"credential_id,omitempty"`
+	Type            string   `json:"type"`
+	Region          string   `json:"region,omitempty"`
+	Size            string   `json:"size,omitempty"`
+	OperatingSystem string   `json:"operating_system,omitempty"`
+	PHPVersion      string   `json:"php_version,omitempty"`
+	DatabaseType    string   `json:"database_type,omitempty"`
+	SSHKeyIDs       []string `json:"ssh_key_ids,omitempty"`
+	InstallAgent    *bool    `json:"install_agent,omitempty"`
+	IP              string   `json:"ip,omitempty"`
+	SSHPort         int      `json:"port,omitempty"`
+	SSHUser         string   `json:"ssh_user,omitempty"`
 }
 
 type CreateServerOptions struct {
-	Providers        []ProviderOption `json:"providers"`
-	OperatingSystems []SelectOption   `json:"operating_systems"`
-	Types            []SelectOption   `json:"types"`
-	PHPVersions      []SelectOption   `json:"php_versions,omitempty"`
+	PHPVersions      map[string]string               `json:"phpVersions"`
+	DatabaseTypes    map[string]string               `json:"databaseTypes"`
+	ServerTypes      map[string]string               `json:"serverTypes"`
+	OperatingSystems map[string]string               `json:"operatingSystems"`
+	Plans            map[string]ServerProviderConfig `json:"plans"`
+	CanCreateServer  bool                            `json:"canCreateServer"`
 }
 
-type ProviderOption struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Provider string         `json:"provider"`
-	Regions  []SelectOption `json:"regions"`
-	Sizes    []SelectOption `json:"sizes"`
+type ServerProviderConfig struct {
+	Plans   []ServerPlanOption `json:"plans"`
+	Regions []ServerPlanOption `json:"regions"`
+	Images  map[string]any     `json:"images,omitempty"`
+}
+
+type ServerPlanOption struct {
+	Value string `json:"value"`
+	Title string `json:"title"`
 }
 
 type SelectOption struct {
@@ -264,11 +279,14 @@ type SelectOption struct {
 }
 
 type CreateSiteRequest struct {
-	Address      string `json:"address"`
-	Type         string `json:"type"`
-	PHPVersion   string `json:"php_version,omitempty"`
-	WebFolder    string `json:"web_folder,omitempty"`
-	ZeroDowntime bool   `json:"zero_downtime_deployment"`
+	Address                     string  `json:"address"`
+	Type                        string  `json:"type"`
+	PHPVersion                  string  `json:"php_version,omitempty"`
+	WebFolder                   string  `json:"web_folder,omitempty"`
+	ZeroDowntime                bool    `json:"zero_downtime_deployment"`
+	SourceControlID             *string `json:"source_control_id,omitempty"`
+	SourceControlRepositoriesID *string `json:"source_control_repositories_id,omitempty"`
+	RepositoryBranch            string  `json:"repository_branch,omitempty"`
 }
 
 type SwitchTeamRequest struct {
