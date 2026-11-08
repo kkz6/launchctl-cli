@@ -66,8 +66,18 @@ team membership. Support staff can inspect; the mutations below require
   `uninstallation_failed_at` and permits a later explicit retry. A successful
   request alone does not mean remote files are gone.
 - `DELETE /admin/servers/<server-id>` requires the exact `confirmation_name`.
-  Remove all sites and Docker projects first. Custom-server deletion removes
-  only the record; cloud deletion queues provider instance destruction.
+  Remove all sites and Docker projects first; starting, provisioning, and
+  deleting servers are blocked. Custom-server deletion removes only the record;
+  ordinary cloud deletion queues provider instance destruction using saved
+  credentials, without SSH. Provider failure retains the record for an explicit
+  retry. A queued response is not completion; re-fetch the server.
+  For explicitly authorized removal from launchctl only, include
+  `"mode":"remove_record"` with `confirmation_name` in the same DELETE body.
+  This is useful when cloud access is revoked and returns `status: "removed"`.
+  It keeps the same authorization, child-resource, and lifecycle guards, makes
+  no provider request, and leaves the machine, its data, and provider billing
+  unchanged. Do not use record removal as a fallback for failed cloud deletion
+  unless the user authorized that distinct outcome.
 
 Raw mutations have no built-in confirmation. Use them only for an authorized,
 resolved target and never treat a role change as authorization to delete data.
