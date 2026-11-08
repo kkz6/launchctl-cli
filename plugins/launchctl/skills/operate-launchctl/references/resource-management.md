@@ -71,13 +71,15 @@ team membership. Support staff can inspect; the mutations below require
   ordinary cloud deletion queues provider instance destruction using saved
   credentials, without SSH. Provider failure retains the record for an explicit
   retry. A queued response is not completion; re-fetch the server.
-  For explicitly authorized removal from launchctl only, include
-  `"mode":"remove_record"` with `confirmation_name` in the same DELETE body.
-  This is useful when cloud access is revoked and returns `status: "removed"`.
+- `DELETE /admin/servers/<server-id>/record` removes only the launchctl record
+  and requires the exact `confirmation_name` in the request body. Use it only
+  when that outcome is explicitly authorized, such as when cloud access is
+  revoked. A successful response returns `status: "removed"`.
   It keeps the same authorization, child-resource, and lifecycle guards, makes
   no provider request, and leaves the machine, its data, and provider billing
   unchanged. Do not use record removal as a fallback for failed cloud deletion
-  unless the user authorized that distinct outcome.
+  unless the user authorized that distinct outcome. If the dedicated endpoint
+  is unavailable, stop; never substitute the ordinary server DELETE endpoint.
 
 Raw mutations have no built-in confirmation. Use them only for an authorized,
 resolved target and never treat a role change as authorization to delete data.
