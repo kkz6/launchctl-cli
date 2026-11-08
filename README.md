@@ -47,7 +47,7 @@ detects local changes, and never replaces an unmanaged skill directory.
 For the versioned Codex marketplace plugin:
 
 ```bash
-codex plugin marketplace add kkz6/launchctl-cli --ref v0.4.0
+codex plugin marketplace add kkz6/launchctl-cli --ref v0.4.1
 codex plugin add launchctl@launchctl
 ```
 

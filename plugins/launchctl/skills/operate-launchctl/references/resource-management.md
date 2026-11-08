@@ -44,6 +44,34 @@ web folder, branch, retention (1–50) and deployment queuing. Empty strings cle
 supported fields. A pending PHP version is not yet active; deletion_requested
 is not completed cleanup. Use raw API routes for hooks/TLS/queue-worker settings.
 
+## Staff administration
+
+Staff actions have no dedicated CLI commands. Use confirmed `/admin/*` routes
+with `lctl api` (prepend `/api` for the CLI), and resolve the user/site from
+read-only admin responses first. These are platform permissions, separate from
+team membership. Support staff can inspect; the mutations below require
+`super_admin` and are unavailable while impersonating another user.
+
+- `PATCH /admin/users/<user-id>/staff-role` requires an explicit `staff_role`:
+  `null` removes staff access, or use `support` / `super_admin`. Self role
+  changes and demoting the last super administrator are blocked. A successful
+  response includes the saved role; subsequent admin requests use the new role.
+- `DELETE /admin/users/<user-id>` blocks staff accounts; paid billing history
+  remains a blocker after demotion. Do not demote someone merely to work around
+  a failed deletion unless that role change is also authorized.
+- `DELETE /admin/sites/<site-id>` requires `confirmation_domain` matching the
+  exact stored address. The API uses the site's actual owning server/team and
+  returns `deletion_requested`. Re-fetch `/admin/users/<user-id>/sites`:
+  `uninstallation_requested_at` means pending; failure retains the record with
+  `uninstallation_failed_at` and permits a later explicit retry. A successful
+  request alone does not mean remote files are gone.
+- `DELETE /admin/servers/<server-id>` requires the exact `confirmation_name`.
+  Remove all sites and Docker projects first. Custom-server deletion removes
+  only the record; cloud deletion queues provider instance destruction.
+
+Raw mutations have no built-in confirmation. Use them only for an authorized,
+resolved target and never treat a role change as authorization to delete data.
+
 ## Compose stacks
 
 Use `docker composes` (`docker compose` alias), scoped by server and project.
