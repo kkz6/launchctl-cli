@@ -27,6 +27,8 @@ and use `lctl api` only for backend resources without a dedicated command.
    project, or application context matters. Pass `--profile` when the user
    identifies a non-active profile.
 5. Resolve human names to immutable IDs through list commands. Do not guess IDs.
+   Confirm the selected team's role before mutations; permissions do not carry
+   across account or team switches.
 
 Read [references/commands.md](references/commands.md) when choosing a command or
 when the request spans more than one resource family.

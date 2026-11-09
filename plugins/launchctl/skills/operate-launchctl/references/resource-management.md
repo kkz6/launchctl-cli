@@ -44,6 +44,11 @@ web folder, branch, retention (1–50) and deployment queuing. Empty strings cle
 supported fields. A pending PHP version is not yet active; deletion_requested
 is not completed cleanup. Use raw API routes for hooks/TLS/queue-worker settings.
 
+Site deployment tokens and webhook URLs are credentials. Authorized site-detail
+responses expose them only to deployment-capable Editor/Admin/Owner sessions,
+never Members or Spectate sessions. Lists and shared WebSocket messages omit
+them. Do not print these values; regenerating a token requires Admin/Owner access.
+
 ## Staff administration
 
 Staff actions have no dedicated CLI commands. Use confirmed `/admin/*` routes

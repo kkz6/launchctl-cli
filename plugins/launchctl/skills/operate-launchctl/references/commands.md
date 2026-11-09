@@ -36,6 +36,15 @@ After a binary update, update the separately managed skill with
 | Bind repository to site or Docker workload | `lctl init` |
 | Live dashboard | `lctl status` |
 
+Permissions apply to the selected team. Members have read-only resource access;
+Editors can create/update resources, deploy, roll back, and change deployment
+settings. Admins and Owners can delete servers/sites and manage restricted
+actions such as provider connections; team settings and member role changes
+require the Owner. Platform staff access is separate. Spectate sessions are
+always read-only, even when the viewed user is an Owner. For a permission denial,
+check the active account/team and ask its owner for the needed role; do not use
+a deployment webhook to bypass the denial.
+
 ## Servers and sites
 
 | Outcome | Command |
