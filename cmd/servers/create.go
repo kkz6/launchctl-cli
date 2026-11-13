@@ -80,7 +80,7 @@ func newCreateCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&req.Name, "name", "", "Server name (required)")
 	cmd.Flags().StringVar(&description, "description", "", "Server description")
-	cmd.Flags().StringVar(&req.Provider, "provider", "", "custom_server, digitalocean, hetzner, linode, vultr, or aws (required)")
+	cmd.Flags().StringVar(&req.Provider, "provider", "", "custom_server, digitalocean, hetzner, linode, or vultr (required)")
 	cmd.Flags().StringVar(&req.Type, "type", "", "php, database, loadbalancer, or docker (required)")
 	cmd.Flags().StringVar(&req.CredentialID, "credential-id", "", "Connected provider credential ID (required for cloud servers)")
 	cmd.Flags().StringVar(&req.Region, "region", "", "Provider region (required for cloud servers)")
@@ -114,15 +114,17 @@ func validateCreateServer(req api.CreateServerRequest) error {
 		if req.CredentialID != "" || req.Region != "" || req.Size != "" {
 			return fmt.Errorf("--credential-id, --region, and --size apply only to cloud servers")
 		}
-	case "digitalocean", "hetzner", "linode", "vultr", "aws":
+	case "digitalocean", "hetzner", "linode", "vultr":
 		if strings.TrimSpace(req.CredentialID) == "" || strings.TrimSpace(req.Region) == "" || strings.TrimSpace(req.Size) == "" {
 			return fmt.Errorf("--credential-id, --region, and --size are required for cloud servers")
 		}
 		if req.IP != "" {
 			return fmt.Errorf("--ip applies only to custom_server")
 		}
+	case "aws":
+		return fmt.Errorf("AWS EC2 provisioning is not supported")
 	default:
-		return fmt.Errorf("--provider must be custom_server, digitalocean, hetzner, linode, vultr, or aws")
+		return fmt.Errorf("--provider must be custom_server, digitalocean, hetzner, linode, or vultr")
 	}
 	return nil
 }
