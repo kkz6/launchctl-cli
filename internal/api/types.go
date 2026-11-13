@@ -269,8 +269,9 @@ type ServerProviderConfig struct {
 }
 
 type ServerPlanOption struct {
-	Value string `json:"value"`
-	Title string `json:"title"`
+	Value   string   `json:"value"`
+	Title   string   `json:"title"`
+	Regions []string `json:"regions,omitempty"`
 }
 
 type SelectOption struct {
