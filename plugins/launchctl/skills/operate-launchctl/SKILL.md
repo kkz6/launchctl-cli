@@ -93,6 +93,42 @@ PHP/static site deployment commands.
 6. Report the failing step and evidence. Do not roll back or redeploy unless the
    user requests that mutation.
 
+### Check live releases and recover PHP runtime
+
+For a PHP/static site with zero downtime deployment, inspect the server's actual
+release inventory before choosing a rollback target:
+
+```bash
+lctl api GET "/api/servers/$SERVER_ID/sites/$SITE_ID/releases"
+```
+
+Use `data.status`, `active_release`, `checked_at`, and `releases`; never infer the
+live release from history order, timestamps, or a deployment's success status.
+A failed deployment can still be live after promotion. If inventory is `busy`,
+`unavailable`, or `unsupported`, do not choose a rollback target from cached
+history. Only offer a retained entry with `rollback_available: true`, using its
+`deployment_id` with the typed rollback command. Re-fetch inventory after a
+terminal deployment event or a reconnect.
+
+If code is already live but PHP activation failed, use an authorized runtime
+refresh instead of repeating the rollback. Explain that PHP-FPM is shared by
+other sites using that PHP version on the same server. Start the event watcher
+before requesting the refresh:
+
+```bash
+lctl events --filter 'deployment.runtime.*' --filter 'task.*' --json
+# In another terminal, after resolving and authorizing the target:
+lctl api POST "/api/servers/$SERVER_ID/sites/$SITE_ID/runtime/refresh"
+```
+
+Refresh reloads the selected PHP-FPM service and uses the configured worker
+restart policy; it does not switch releases, rebuild, rerun hooks, or run or
+reverse database migrations. Match events to `site_id` and follow the emitted `task_id`
+with `lctl tasks watch <task-id> --server <server-id>`. Reconcile task exit status
+and inventory before reporting success. A `post_actions_pending` warning means
+PHP/code activation succeeded but worker restart could not be queued; report
+that separately and inspect worker tasks rather than replaying the code switch.
+
 ### Deploy from automation
 
 Use environment-provided credentials and a bounded wait:

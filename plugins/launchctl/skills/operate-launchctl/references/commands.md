@@ -73,7 +73,9 @@ a deployment webhook to bypass the denial.
 | Bounded deploy | add `--wait --timeout <seconds> --json` (works without `--ci`) |
 | History/detail | `deploy list <site-id>`, `deploy show <deployment-id>` |
 | Output | `deploy logs <site-id> [deployment-id] [--follow]` |
+| Actual live/retained releases | `lctl api GET /api/servers/<server-id>/sites/<site-id>/releases` |
 | Rollback | `lctl deploy rollback <deployment-id> --server <id> --site <id> --yes --wait --json` |
+| Retry PHP activation for current code | `lctl api POST /api/servers/<server-id>/sites/<site-id>/runtime/refresh` |
 | Cancel queued deployments | `lctl deploy cancel-queued [site-id] --server <id> --yes --json` |
 | List task records | `lctl tasks list --server <id>` |
 | Live task | `lctl tasks watch <task-id> --server <id>` |
